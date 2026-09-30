@@ -1053,9 +1053,6 @@ export class QQApp {
 
             $chatView.html(chatHtml);
             this._scrollToBottom();
-            if (!this.isMultiSelectMode && !this.isGenerating) {
-                this.container.find('#sp-qq-chat-input').focus();
-            }
             return;
         }
 
@@ -1155,9 +1152,6 @@ export class QQApp {
 
         $chatView.html(chatHtml);
         this._scrollToBottom();
-        if (!this.isMultiSelectMode && !this.isGenerating) {
-            this.container.find('#sp-qq-chat-input').focus();
-        }
     }
 
     /**
@@ -1280,7 +1274,11 @@ export class QQApp {
         const $sendBtn = this.container.find('#sp-qq-send-btn');
         const $input = this.container.find('#sp-qq-chat-input');
         $sendBtn.removeClass('is-generating').prop('disabled', false).attr('title', '发送').html('<i class="fa-solid fa-paper-plane"></i>');
-        $input.prop('disabled', false).focus();
+        $input.prop('disabled', false);
+        $input.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
 
         if (typeof toastr !== 'undefined') {
             toastr.info('已停止发送', 'QQ');
@@ -1371,6 +1369,11 @@ export class QQApp {
         if (!this.activeChatId) return;
 
         $input.val('');
+        // 关键防护：用户发送后主动失焦，让移动端软键盘及时收起，避免遮挡聊天界面与回复
+        $input.blur();
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
 
         // 1. 界面上立刻上屏用户气泡
         const $stream = this.container.find('#sp-qq-chat-stream');
@@ -1397,6 +1400,7 @@ export class QQApp {
         const $stream = this.container.find('#sp-qq-chat-stream');
 
         this.isGenerating = true;
+        $input.blur();
         $input.prop('disabled', true);
         $sendBtn.addClass('is-generating').prop('disabled', false).attr('title', '停止发送').html('<i class="fa-solid fa-stop"></i>');
 
@@ -1461,7 +1465,13 @@ export class QQApp {
                 }
             } finally {
                 this.isGenerating = false;
-                $input.prop('disabled', false).focus();
+                $input.prop('disabled', false);
+                // 关键防护：联系人回复完毕后严禁自动聚焦，主动失焦收起虚拟键盘
+                $input.blur();
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+                setTimeout(() => { $input.blur(); }, 50);
                 $sendBtn.removeClass('is-generating').prop('disabled', false).attr('title', '发送').html('<i class="fa-solid fa-paper-plane"></i>');
             }
             return;
@@ -1521,7 +1531,13 @@ export class QQApp {
             }
         } finally {
             this.isGenerating = false;
-            $input.prop('disabled', false).focus();
+            $input.prop('disabled', false);
+            // 关键防护：联系人回复完毕后严禁自动聚焦，主动失焦收起虚拟键盘
+            $input.blur();
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+            setTimeout(() => { $input.blur(); }, 50);
             $sendBtn.removeClass('is-generating').prop('disabled', false).attr('title', '发送').html('<i class="fa-solid fa-paper-plane"></i>');
         }
     }
@@ -1543,7 +1559,9 @@ export class QQApp {
         this._renderGroupMemberPicker(friends);
         this._updateGroupCreateButtonState();
         this.container.find('#sp-qq-create-group-modal').show();
-        this.container.find('#sp-qq-group-name-input').focus();
+        if (window.innerWidth > 600) {
+            this.container.find('#sp-qq-group-name-input').focus();
+        }
     }
 
     /**
@@ -1729,7 +1747,9 @@ export class QQApp {
         this.container.on('click', '#sp-qq-btn-open-manual-add', () => {
             this.container.find('#sp-qq-dropdown-menu').hide();
             this.container.find('#sp-qq-manual-modal').show();
-            this.container.find('#sp-qq-new-name').focus();
+            if (window.innerWidth > 600) {
+                this.container.find('#sp-qq-new-name').focus();
+            }
         });
 
         // 6. 关闭弹窗
@@ -1750,7 +1770,9 @@ export class QQApp {
             this.container.find('#sp-qq-setting-user-name').val(profile.name || '我');
             this.container.find('#sp-qq-setting-qq-number').val(profile.qqNumber || '888888');
             this.container.find('#sp-qq-settings-modal').show();
-            this.container.find('#sp-qq-setting-user-name').focus();
+            if (window.innerWidth > 600) {
+                this.container.find('#sp-qq-setting-user-name').focus();
+            }
         };
         this.container.on('click', '#sp-qq-settings-btn, #sp-qq-btn-open-settings', openSettingsModal);
 

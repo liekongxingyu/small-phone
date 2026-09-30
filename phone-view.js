@@ -158,7 +158,7 @@ export class PhoneView {
                     setTimeout(() => {
                         const $input = $('#sp-qq-chat-input');
                         if ($input.length > 0) {
-                            $input.val(sendText).trigger('input').trigger('change').focus();
+                            $input.val(sendText).trigger('input').trigger('change');
                         }
                     }, 80);
                 }
