@@ -124,6 +124,11 @@ export class PhoneView {
                             <div class="small-phone-home-indicator"></div>
                         </div>
                     </div>
+
+                    <!-- 右下角自由移动控制手柄（长按或拖拽可平移手机位置） -->
+                    <div class="small-phone-drag-corner" id="small-phone-drag-corner" title="长按右下角移动位置">
+                        <i class="fa-solid fa-arrows-up-down-left-right"></i>
+                    </div>
                 </div>
             </div>
         `;
@@ -377,7 +382,7 @@ export class PhoneView {
      * 判断当前是否为移动端屏幕（宽度 <= 600px）
      */
     isMobileView() {
-        return window.innerWidth <= 600;
+        return (window.innerWidth || $(window).width()) <= 600;
     }
 
     /**
@@ -386,7 +391,6 @@ export class PhoneView {
      * - 桌面端：PPT 矩形自由移动
      */
     _setupDraggable() {
-        const handle = $('#small-phone-drag-handle');
         const target = this.container;
 
         let isDragging = false;
@@ -395,99 +399,91 @@ export class PhoneView {
         let initialLeft = 0;
         let initialTop = 0;
 
-        handle.on('pointerdown', (e) => {
+        const onPointerDown = (e) => {
+            // 忽略右上角关闭按钮点击或拉伸状态
             if ($(e.target).closest('#small-phone-close-btn').length > 0 || this.isInteracting) {
                 return;
             }
 
             isDragging = true;
             this.isInteracting = true;
-            startX = e.clientX;
-            startY = e.clientY;
 
-            if (this.isMobileView()) {
-                // 移动端：开启下拉收起手势
-                target.addClass('is-mobile-pulling');
-                $(document).on('pointermove.smallphonedrag', onMobilePointerMove);
-                $(document).on('pointerup.smallphonedrag pointercancel.smallphonedrag', onMobilePointerUp);
-            } else {
-                // 桌面端：PPT 自由拖拽
-                const offset = target.position();
-                initialLeft = offset.left;
-                initialTop = offset.top;
+            const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
 
-                target.addClass('is-dragging');
-                $('body').addClass('small-phone-grabbing');
+            startX = clientX;
+            startY = clientY;
 
-                $(document).on('pointermove.smallphonedrag', onDesktopPointerMove);
-                $(document).on('pointerup.smallphonedrag pointercancel.smallphonedrag', onDesktopPointerUp);
-            }
+            const rect = target[0].getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            target.addClass('is-moving-phone is-dragging');
+            $('#small-phone-drag-corner').addClass('is-active');
+            $('body').addClass('small-phone-grabbing');
+
+            $(document).on('pointermove.smallphonedrag touchmove.smallphonedrag', onPointerMove);
+            $(document).on('pointerup.smallphonedrag pointercancel.smallphonedrag touchend.smallphonedrag touchcancel.smallphonedrag', onPointerUp);
 
             e.preventDefault();
-        });
-
-        // 移动端下拉逻辑
-        const onMobilePointerMove = (e) => {
-            if (!isDragging) return;
-            const dy = e.clientY - startY;
-            if (dy > 0) {
-                // 向下拉动带阻尼感
-                const dampedDy = Math.pow(dy, 0.92);
-                target.css('transform', `translate(-50%, calc(-50% + ${Math.round(dampedDy)}px))`);
-            }
         };
 
-        const onMobilePointerUp = (e) => {
+        const onPointerMove = (e) => {
             if (!isDragging) return;
-            isDragging = false;
-            this.isInteracting = false;
-            target.removeClass('is-mobile-pulling');
-            $(document).off('.smallphonedrag');
 
-            const dy = (e.clientY || 0) - startY;
-            if (dy > 70) {
-                // 下拉超过阈值，直接平滑收起
-                this.hide();
-            } else {
-                // 未达到阈值，弹性复位居中
-                target.css('transform', 'translate(-50%, -50%)');
-            }
-        };
+            const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
 
-        // 桌面端自由移动逻辑
-        const onDesktopPointerMove = (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
 
             let newLeft = initialLeft + dx;
             let newTop = initialTop + dy;
 
-            const maxLeft = $(window).width() - target.outerWidth();
-            const maxTop = $(window).height() - target.outerHeight();
+            const winW = window.innerWidth || $(window).width();
+            const winH = window.innerHeight || $(window).height();
+            const targetW = target.outerWidth();
+            const targetH = target.outerHeight();
 
-            newLeft = Math.max(10, Math.min(newLeft, maxLeft - 10));
-            newTop = Math.max(10, Math.min(newTop, maxTop - 10));
+            // 限制安全可视边界，确保小手机绝不滑出屏幕
+            const maxLeft = Math.max(4, winW - targetW - 4);
+            const maxTop = Math.max(4, winH - targetH - 4);
+
+            newLeft = Math.max(4, Math.min(newLeft, maxLeft));
+            newTop = Math.max(4, Math.min(newTop, maxTop));
 
             target.css({
                 left: `${newLeft}px`,
                 top: `${newTop}px`,
                 right: 'auto',
                 bottom: 'auto',
+                transform: 'none',
             });
         };
 
-        const onDesktopPointerUp = () => {
+        const onPointerUp = () => {
             if (!isDragging) return;
             isDragging = false;
             this.isInteracting = false;
-            target.removeClass('is-dragging');
+
+            target.removeClass('is-moving-phone is-dragging');
+            $('#small-phone-drag-corner').removeClass('is-active');
             $('body').removeClass('small-phone-grabbing');
+
             $(document).off('.smallphonedrag');
 
-            const pos = target.position();
-            SettingsManager.set('position', { x: Math.round(pos.left), y: Math.round(pos.top) });
+            // 分别持久化移动端与桌面端坐标
+            const rect = target[0].getBoundingClientRect();
+            const pos = { x: Math.round(rect.left), y: Math.round(rect.top) };
+            if (this.isMobileView()) {
+                SettingsManager.set('mobilePosition', pos);
+            } else {
+                SettingsManager.set('position', pos);
+            }
         };
+
+        // 顶部状态栏与右下角手柄均可触发拖动平移
+        this.container.on('pointerdown touchstart', '#small-phone-drag-handle, #small-phone-drag-corner', onPointerDown);
     }
 
     /**
@@ -593,35 +589,33 @@ export class PhoneView {
      * - 桌面端：恢复保存尺寸或默认视口绝对正中央
      */
     _restoreGeometry() {
-        if (this.isMobileView()) {
-            this.container.css({
-                width: '',
-                height: '',
-                left: '',
-                top: '',
-                right: '',
-                bottom: '',
-                transform: '',
-            });
-            return;
+        const winW = window.innerWidth || $(window).width();
+        const winH = window.innerHeight || $(window).height();
+        const isMobile = this.isMobileView();
+
+        let width, height;
+        if (isMobile) {
+            width = Math.min(winW - 16, 390);
+            height = Math.min(winH - 24, 740);
+        } else {
+            const savedSize = SettingsManager.get('size') || { width: 300, height: 600 };
+            width = Math.max(this.minWidth, Math.min(savedSize.width || 300, winW - 20));
+            height = Math.max(this.minHeight, Math.min(savedSize.height || 600, winH - 20));
         }
 
-        const winW = $(window).width();
-        const winH = $(window).height();
+        const savedPos = isMobile
+            ? SettingsManager.get('mobilePosition')
+            : SettingsManager.get('position');
 
-        const savedSize = SettingsManager.get('size') || { width: 300, height: 600 };
-        const width = Math.max(this.minWidth, Math.min(savedSize.width || 300, winW - 20));
-        const height = Math.max(this.minHeight, Math.min(savedSize.height || 600, winH - 20));
-
-        const savedPos = SettingsManager.get('position');
         let left, top;
-
         if (savedPos && typeof savedPos.x === 'number' && typeof savedPos.y === 'number') {
-            left = Math.max(10, Math.min(savedPos.x, winW - width - 10));
-            top = Math.max(10, Math.min(savedPos.y, winH - height - 10));
+            const maxL = Math.max(6, winW - width - 6);
+            const maxT = Math.max(6, winH - height - 6);
+            left = Math.max(6, Math.min(savedPos.x, maxL));
+            top = Math.max(6, Math.min(savedPos.y, maxT));
         } else {
-            left = Math.max(10, Math.round((winW - width) / 2));
-            top = Math.max(10, Math.round((winH - height) / 2));
+            left = Math.max(8, Math.round((winW - width) / 2));
+            top = Math.max(12, Math.round((winH - height) / 2));
         }
 
         this.container.css({
@@ -631,7 +625,7 @@ export class PhoneView {
             top: `${top}px`,
             right: 'auto',
             bottom: 'auto',
-            transform: '',
+            transform: 'none',
         });
     }
 
@@ -698,6 +692,11 @@ export class PhoneView {
         this._updateTime();
         this.container.removeClass('closing').addClass('opening').show();
         this.isOpen = true;
+        setTimeout(() => {
+            if (this.container && this.isOpen) {
+                this.container.removeClass('opening');
+            }
+        }, 260);
     }
 
     /**

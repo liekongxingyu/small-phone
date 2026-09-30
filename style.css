@@ -153,7 +153,49 @@
         0 30px 80px -10px rgba(0, 0, 0, 0.8);
 }
 
-/* 全局拉伸光标锁定 */
+/* 正在移动中的微光与轻微半透明 */
+.small-phone-wrapper.is-moving-phone .small-phone-case {
+    box-shadow: 
+        0 0 0 2px rgba(59, 130, 246, 0.65),
+        0 20px 50px rgba(0, 0, 0, 0.7);
+    opacity: 0.95;
+    transition: none !important;
+}
+
+/* 右下角自由移动控制把手（支持长按/拖拽平移手机） */
+.small-phone-drag-corner {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 11px;
+    cursor: move;
+    z-index: 100;
+    touch-action: none;
+    user-select: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: all 0.18s ease;
+}
+.small-phone-drag-corner:hover,
+.small-phone-drag-corner:active,
+.small-phone-drag-corner.is-active {
+    background: rgba(59, 130, 246, 0.75);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: #ffffff;
+    transform: scale(1.15);
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.75);
+}
+
+/* 全局拉伸与拖动光标锁定 */
 body.small-phone-grabbing,
 body.small-phone-grabbing * {
     cursor: grabbing !important;
@@ -512,22 +554,22 @@ body.small-phone-resizing-sw, body.small-phone-resizing-sw * { cursor: nesw-resi
 @media (max-width: 600px) {
     .small-phone-wrapper {
         position: fixed !important;
-        left: 50% !important;
-        top: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: calc(100vw - 20px) !important;
-        max-width: 390px !important;
-        height: 84vh !important;
-        max-height: 740px !important;
-        right: auto !important;
-        bottom: auto !important;
+        box-sizing: border-box !important;
         touch-action: none;
-        transition: transform 0.28s cubic-bezier(0.18, 0.9, 0.3, 1.15), opacity 0.25s ease;
     }
 
-    /* 手势下拉中禁用 CSS 过渡动画，保证位移实时紧贴手指 */
-    .small-phone-wrapper.is-mobile-pulling {
-        transition: none !important;
+    /* 手机端显眼易按的右下角移动手柄 */
+    .small-phone-drag-corner {
+        display: flex !important;
+        width: 30px;
+        height: 30px;
+        font-size: 12px;
+        right: 8px;
+        bottom: 8px;
+        background: rgba(30, 41, 59, 0.88);
+        border: 1.5px solid rgba(59, 130, 246, 0.55);
+        color: #93c5fd;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
 
     /* 手机端隐藏全部 8 向拉伸控制把手，彻底杜绝手指误触变形 */
