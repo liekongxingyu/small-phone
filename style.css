@@ -1,0 +1,4322 @@
+/* ==========================================================================
+   SmallPhone Plugin Stylesheet
+   PPT Rectangle Interactive Mode (8-direction Resize & Drag)
+   ========================================================================== */
+
+:root {
+    --sp-chat-font-size: 11.5px;
+}
+
+/* 手机外部包装容器（绝对定位，尺寸与坐标由 JS 动态计算居中） */
+.small-phone-wrapper {
+    position: fixed;
+    z-index: 9999;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    transform-origin: center center;
+    box-sizing: border-box;
+}
+
+.small-phone-wrapper.opening {
+    animation: smallPhoneCenterEnter 0.28s cubic-bezier(0.18, 0.9, 0.3, 1.15) forwards;
+}
+
+.small-phone-wrapper.closing {
+    animation: smallPhoneCenterExit 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes smallPhoneCenterEnter {
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes smallPhoneCenterExit {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+}
+
+/* ==========================================================================
+   PPT 矩形 8 向 Resize 手柄系统
+   ========================================================================== */
+.small-phone-resize-handle {
+    position: absolute;
+    z-index: 20;
+    box-sizing: border-box;
+}
+
+/* 四边手柄（感应范围充足，透明不影响视觉） */
+.small-phone-resize-handle.handle-n {
+    top: -6px;
+    left: 20px;
+    right: 20px;
+    height: 12px;
+    cursor: ns-resize;
+}
+.small-phone-resize-handle.handle-s {
+    bottom: -6px;
+    left: 20px;
+    right: 20px;
+    height: 12px;
+    cursor: ns-resize;
+}
+.small-phone-resize-handle.handle-w {
+    left: -6px;
+    top: 20px;
+    bottom: 20px;
+    width: 12px;
+    cursor: ew-resize;
+}
+.small-phone-resize-handle.handle-e {
+    right: -6px;
+    top: 20px;
+    bottom: 20px;
+    width: 12px;
+    cursor: ew-resize;
+}
+
+/* 四角手柄与控制点锚点（仿 PPT / Figma 矩形节点） */
+.small-phone-resize-handle.handle-nw {
+    top: -7px;
+    left: -7px;
+    width: 24px;
+    height: 24px;
+    cursor: nwse-resize;
+}
+.small-phone-resize-handle.handle-ne {
+    top: -7px;
+    right: -7px;
+    width: 24px;
+    height: 24px;
+    cursor: nesw-resize;
+}
+.small-phone-resize-handle.handle-sw {
+    bottom: -7px;
+    left: -7px;
+    width: 24px;
+    height: 24px;
+    cursor: nesw-resize;
+}
+.small-phone-resize-handle.handle-se {
+    bottom: -7px;
+    right: -7px;
+    width: 24px;
+    height: 24px;
+    cursor: nwse-resize;
+}
+
+/* PPT 风格控制小圆点 */
+.handle-dot {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid #3b82f6;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    pointer-events: none;
+}
+.handle-nw .handle-dot { top: 2px; left: 2px; }
+.handle-ne .handle-dot { top: 2px; right: 2px; }
+.handle-sw .handle-dot { bottom: 2px; left: 2px; }
+.handle-se .handle-dot { bottom: 2px; right: 2px; }
+
+/* 鼠标悬停在手机包装层或正在拉伸时，显示 PPT 节点 */
+.small-phone-wrapper:hover .handle-dot,
+.small-phone-wrapper.is-resizing .handle-dot {
+    opacity: 0.9;
+}
+.small-phone-resize-handle:hover .handle-dot {
+    opacity: 1;
+    transform: scale(1.25);
+    background: #3b82f6;
+    border-color: #ffffff;
+}
+
+/* 正在拉伸时的微发光选中边框 */
+.small-phone-wrapper.is-resizing .small-phone-case {
+    box-shadow: 
+        0 0 0 2px #3b82f6,
+        0 30px 80px -10px rgba(0, 0, 0, 0.8);
+}
+
+/* 全局拉伸光标锁定 */
+body.small-phone-grabbing,
+body.small-phone-grabbing * {
+    cursor: grabbing !important;
+}
+body.small-phone-resizing-n, body.small-phone-resizing-n * { cursor: ns-resize !important; }
+body.small-phone-resizing-s, body.small-phone-resizing-s * { cursor: ns-resize !important; }
+body.small-phone-resizing-w, body.small-phone-resizing-w * { cursor: ew-resize !important; }
+body.small-phone-resizing-e, body.small-phone-resizing-e * { cursor: ew-resize !important; }
+body.small-phone-resizing-nw, body.small-phone-resizing-nw * { cursor: nwse-resize !important; }
+body.small-phone-resizing-se, body.small-phone-resizing-se * { cursor: nwse-resize !important; }
+body.small-phone-resizing-ne, body.small-phone-resizing-ne * { cursor: nesw-resize !important; }
+body.small-phone-resizing-sw, body.small-phone-resizing-sw * { cursor: nesw-resize !important; }
+
+/* ==========================================================================
+   手机金属外壳与机身
+   ========================================================================== */
+.small-phone-case {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(145deg, #2d2e32, #161719);
+    border-radius: 46px;
+    padding: 10px;
+    box-sizing: border-box;
+    box-shadow: 
+        0 28px 70px -10px rgba(0, 0, 0, 0.75),
+        0 10px 30px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+        inset 0 1px 2px rgba(255, 255, 255, 0.25);
+    transition: box-shadow 0.2s;
+}
+
+/* 侧边物理按键微造型 */
+.small-phone-btn-volume-up,
+.small-phone-btn-volume-down,
+.small-phone-btn-power {
+    position: absolute;
+    background: #252628;
+    border-radius: 2px;
+}
+.small-phone-btn-volume-up {
+    left: -3px;
+    top: 100px;
+    width: 3px;
+    height: 38px;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+.small-phone-btn-volume-down {
+    left: -3px;
+    top: 150px;
+    width: 3px;
+    height: 38px;
+    border-top-left-radius: 3px;
+    border-bottom-left-radius: 3px;
+}
+.small-phone-btn-power {
+    right: -3px;
+    top: 120px;
+    width: 3px;
+    height: 52px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+/* 手机屏幕视窗 */
+.small-phone-screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 12%, #1a1e36 0%, #0d0f1a 55%, #05060a 100%);
+    border-radius: 38px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.08);
+}
+
+/* 顶部状态栏（支持按住拖动手机） */
+.small-phone-status-bar {
+    position: relative;
+    height: 38px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    cursor: move;
+    z-index: 10;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11px;
+    font-weight: 600;
+}
+.small-phone-wrapper.is-dragging .small-phone-status-bar {
+    cursor: grabbing;
+}
+
+/* 灵动岛 (Dynamic Island) */
+.small-phone-island {
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    width: 82px;
+    height: 20px;
+    background: #000000;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    box-sizing: border-box;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    pointer-events: none;
+}
+.small-phone-camera {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #1e3a5f, #09111e);
+    box-shadow: inset 0 0 1px #4880c8;
+}
+.small-phone-speaker {
+    width: 26px;
+    height: 3px;
+    border-radius: 2px;
+    background: #111111;
+}
+
+/* 状态栏图标与关闭按钮 */
+.small-phone-status-icons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+}
+.small-phone-close-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 2px 4px;
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: 50%;
+    transition: color 0.15s, background-color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.small-phone-close-btn:hover {
+    color: #ff5f56;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* 主屏幕视口（随拉长自适应高度，支持滚动） */
+.small-phone-viewport {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    padding: 14px 16px;
+    box-sizing: border-box;
+}
+
+.small-phone-viewport::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+/* 日期与小组件区域 */
+.small-phone-widgets-area {
+    margin: 14px 0 26px 0;
+    text-align: center;
+}
+.small-phone-date-display {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    letter-spacing: 0.3px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* 应用网格：默认一排 4 个（经典手机主屏布局） */
+.small-phone-app-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px 6px;
+    justify-items: center;
+}
+
+/* 单个 App 项 */
+.small-phone-app-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    outline: none;
+    transition: transform 0.15s cubic-bezier(0.3, 1.2, 0.5, 1);
+    width: 58px;
+}
+.small-phone-app-item:hover {
+    transform: scale(1.08);
+}
+.small-phone-app-item:active {
+    transform: scale(0.92);
+}
+
+/* App 图标基础实体 */
+.small-phone-app-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #ffffff;
+    box-shadow: 
+        0 6px 14px rgba(0, 0, 0, 0.35),
+        inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    transition: box-shadow 0.2s, transform 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.small-phone-app-item:hover .small-phone-app-icon {
+    box-shadow: 
+        0 10px 20px rgba(0, 0, 0, 0.5),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+/* 1. QQ 图标 */
+.small-phone-icon-qq {
+    background: linear-gradient(135deg, #12b7f5 0%, #007be6 100%);
+    box-shadow: 0 6px 14px rgba(18, 183, 245, 0.35);
+}
+.small-phone-icon-qq i {
+    font-size: 24px;
+    color: #ffffff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+/* 2. 淘宝图标 */
+.small-phone-icon-taobao {
+    background: linear-gradient(135deg, #ff7a00 0%, #ff4200 100%);
+    box-shadow: 0 6px 14px rgba(255, 66, 0, 0.35);
+}
+.small-phone-icon-taobao .small-phone-icon-text {
+    font-size: 25px;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+    letter-spacing: -1px;
+}
+
+/* 3. X 图标 */
+.small-phone-icon-x {
+    background: linear-gradient(135deg, #1c1d21 0%, #000000 100%);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5);
+}
+.small-phone-icon-x i {
+    font-size: 22px;
+    color: #ffffff;
+    filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.25));
+}
+
+/* 4. 拟物设置图标 */
+.small-phone-icon-settings {
+    background: linear-gradient(135deg, #8a8d93 0%, #4a4d52 100%);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.small-phone-icon-settings::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.1) 100%);
+    pointer-events: none;
+}
+.small-phone-icon-settings i {
+    font-size: 22px;
+    color: #f0f0f3;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.small-phone-app-item:hover .small-phone-icon-settings i {
+    transform: rotate(45deg);
+}
+
+/* 5. 操作日志图标（排在设置之后） */
+.small-phone-icon-logs {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    box-shadow: 0 6px 14px rgba(2, 132, 199, 0.35);
+}
+.small-phone-icon-logs::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(0,0,0,0.1) 100%);
+    pointer-events: none;
+}
+.small-phone-icon-logs i {
+    font-size: 22px;
+    color: #ffffff;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.small-phone-app-item:hover .small-phone-icon-logs i {
+    transform: rotate(-30deg) scale(1.08);
+}
+
+/* App 标签名 */
+.small-phone-app-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 58px;
+    text-align: center;
+}
+
+/* 底部 Home 键手势条 */
+.small-phone-home-bar-area {
+    height: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding-bottom: 4px;
+}
+.small-phone-home-indicator {
+    width: 90px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 3px;
+    transition: background-color 0.2s, width 0.2s;
+}
+.small-phone-home-bar-area:hover .small-phone-home-indicator {
+    background: rgba(255, 255, 255, 0.95);
+    width: 104px;
+}
+
+/* ==========================================================================
+   移动端与窄屏设备专属响应式优化（宽度 <= 600px）
+   ========================================================================== */
+@media (max-width: 600px) {
+    .small-phone-wrapper {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: calc(100vw - 20px) !important;
+        max-width: 390px !important;
+        height: 84vh !important;
+        max-height: 740px !important;
+        right: auto !important;
+        bottom: auto !important;
+        touch-action: none;
+        transition: transform 0.28s cubic-bezier(0.18, 0.9, 0.3, 1.15), opacity 0.25s ease;
+    }
+
+    /* 手势下拉中禁用 CSS 过渡动画，保证位移实时紧贴手指 */
+    .small-phone-wrapper.is-mobile-pulling {
+        transition: none !important;
+    }
+
+    /* 手机端隐藏全部 8 向拉伸控制把手，彻底杜绝手指误触变形 */
+    .small-phone-resize-handle {
+        display: none !important;
+    }
+
+    /* 隐藏容易在小屏两边溢出的外凸金属物理侧键 */
+    .small-phone-btn-volume-up,
+    .small-phone-btn-volume-down,
+    .small-phone-btn-power {
+        display: none !important;
+    }
+
+    /* 移动端外壳边框更加紧凑，释放更多屏幕空间 */
+    .small-phone-case {
+        border-radius: 36px;
+        padding: 8px;
+    }
+
+    .small-phone-screen {
+        border-radius: 30px;
+    }
+
+    /* 顶部状态栏增加下拉抽屉指示细线 */
+    .small-phone-status-bar {
+        cursor: grab;
+    }
+    .small-phone-status-bar::before {
+        content: '';
+        position: absolute;
+        top: 3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 34px;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+        z-index: 15;
+    }
+}
+
+/* ==========================================================================
+   小手机内部应用页面框架（如设置、后续各功能）
+   ========================================================================== */
+.small-phone-app-page {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    background: #0f1118;
+    animation: spAppPageSlideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spAppPageSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 应用导航顶栏 */
+.sp-page-header {
+    height: 42px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    background: rgba(20, 22, 32, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sp-header-back-btn {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #3b82f6;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background-color 0.15s, transform 0.15s;
+}
+.sp-header-back-btn:hover {
+    background: rgba(59, 130, 246, 0.12);
+    transform: translateX(-2px);
+}
+.sp-header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: 0.2px;
+}
+
+/* 内容滚动区 */
+.sp-page-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 12px;
+    box-sizing: border-box;
+}
+.sp-page-body::-webkit-scrollbar {
+    width: 4px;
+}
+.sp-page-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+}
+
+/* 设置分组容器（手风琴模块） */
+.sp-settings-group {
+    margin-bottom: 12px;
+}
+.sp-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.1s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.sp-group-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+.sp-group-header:active {
+    transform: scale(0.99);
+}
+
+/* 当模块展开时高亮头部 */
+.sp-settings-group:not(.is-collapsed) .sp-group-header {
+    background: rgba(37, 99, 235, 0.12);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.sp-group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.sp-group-icon {
+    color: #3b82f6;
+    font-size: 13px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.sp-group-title-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-group-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.sp-group-badge {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    padding: 2px 7px;
+    border-radius: 9px;
+    max-width: 105px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sp-group-chevron {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.42);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease;
+}
+.sp-settings-group:not(.is-collapsed) .sp-group-chevron {
+    transform: rotate(90deg);
+    color: #60a5fa;
+}
+
+/* 手风琴折叠展开平滑动画 */
+.sp-group-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    opacity: 1;
+}
+.sp-settings-group.is-collapsed .sp-group-body {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    pointer-events: none;
+}
+.sp-group-inner {
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 6px;
+}
+
+/* 拟物毛玻璃卡片 */
+.sp-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px 12px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* 表单字段项 */
+.sp-form-item {
+    margin-bottom: 13px;
+}
+.sp-form-item:last-child {
+    margin-bottom: 0;
+}
+.sp-form-item label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 5px;
+}
+.sp-item-header-inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+.sp-item-header-inline label {
+    margin-bottom: 0;
+}
+.sp-field-hint {
+    display: block;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.42);
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+/* 文本输入框 */
+.sp-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    color: #ffffff;
+    font-size: 12px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+.sp-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* 下拉框包装器 */
+.sp-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+.sp-select {
+    width: 100%;
+    box-sizing: border-box;
+    appearance: none;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    color: #ffffff;
+    font-size: 12px;
+    padding: 7px 28px 7px 10px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    font-family: inherit;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.sp-select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+.sp-select option {
+    background: #181a24;
+    color: #ffffff;
+}
+.sp-select-arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* 拉取小按钮 */
+.sp-btn-link {
+    background: transparent;
+    border: none;
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.15s, background-color 0.15s;
+}
+.sp-btn-link:hover {
+    color: #93c5fd;
+    background: rgba(96, 165, 250, 0.15);
+}
+.sp-btn-link:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* 温度 Badge 胶囊 */
+.sp-temp-badge {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+}
+
+/* 温度滑块 */
+.sp-slider {
+    width: 100%;
+    margin: 8px 0 3px 0;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    outline: none;
+    cursor: pointer;
+}
+.sp-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    border: 1.5px solid #3b82f6;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+.sp-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+.sp-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 2px;
+}
+
+/* 表单底部主按钮 */
+.sp-form-actions {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.sp-btn {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 9px;
+    border: none;
+    outline: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+}
+.sp-btn:active {
+    transform: scale(0.97);
+}
+.sp-btn-primary {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+.sp-btn-primary:hover {
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+    opacity: 0.95;
+}
+
+/* 关于卡片信息 */
+.sp-about-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sp-about-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+}
+.sp-text-muted {
+    color: rgba(255, 255, 255, 0.45);
+}
+.sp-tag-success {
+    font-size: 10.5px;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    padding: 1px 6px;
+    border-radius: 6px;
+}
+
+/* ==========================================================================
+   提示词与注入模块专项样式（iOS Switch 开关、区域分块、测试反馈）
+   ========================================================================== */
+.sp-section-block {
+    display: flex;
+    flex-direction: column;
+}
+.sp-section-title {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 7px;
+}
+.sp-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 12px 0;
+}
+
+/* 开关行布局 */
+.sp-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.sp-switch-info {
+    flex: 1;
+    min-width: 0;
+}
+.sp-switch-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+}
+
+/* iOS 风格拟物滑动开关 */
+.sp-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 24px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.sp-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.sp-switch-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: background-color 0.24s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.24s ease;
+    border-radius: 24px;
+}
+.sp-switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #ffffff;
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 50%;
+    box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.4);
+}
+.sp-switch input:checked + .sp-switch-slider {
+    background-color: #2563eb;
+    border-color: #3b82f6;
+}
+.sp-switch input:checked + .sp-switch-slider:before {
+    transform: translateX(18px);
+}
+
+/* 次级按钮（如测试键） */
+.sp-btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.sp-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* 测试操作行 */
+.sp-test-action-row {
+    width: 100%;
+}
+
+/* 测试反馈结果卡片 */
+.sp-test-result-box {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    animation: spFadeSlideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spFadeSlideDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.sp-test-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+.sp-test-status {
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.sp-status-loading {
+    color: #60a5fa;
+}
+.sp-status-success {
+    color: #34d399;
+}
+.sp-status-error {
+    color: #f87171;
+}
+.sp-test-meta {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    font-family: monospace;
+}
+.sp-test-details {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 7px;
+}
+.sp-test-content-scroll {
+    max-height: 120px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+.sp-test-content-scroll::-webkit-scrollbar {
+    width: 3px;
+}
+.sp-test-content-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+.sp-test-content {
+    font-size: 11.5px;
+    color: #f1f5f9;
+    line-height: 1.45;
+    word-break: break-word;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+/* ==========================================================================
+   提示词条目工作室（PromptStudio）与可拖拽排序样式
+   ========================================================================== */
+.sp-prompt-studio {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+/* 顶部工具栏 */
+.sp-studio-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sp-filter-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+.sp-filter-tabs::-webkit-scrollbar {
+    height: 2px;
+}
+.sp-filter-tab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.65);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.sp-filter-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+.sp-filter-tab.active {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #93c5fd;
+    font-weight: 600;
+}
+
+.sp-studio-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.sp-btn-tool {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 10.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.sp-btn-tool:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+.sp-btn-tool-primary {
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #ffffff;
+}
+.sp-btn-tool-primary:hover {
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+}
+
+/* 新增条目抽屉 */
+.sp-add-item-card {
+    background: rgba(18, 22, 34, 0.95);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.sp-add-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #93c5fd;
+    margin-bottom: 8px;
+}
+.sp-form-row {
+    display: flex;
+    gap: 8px;
+}
+.sp-form-actions-inline {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+/* 提示栏 */
+.sp-drag-hint-bar {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.45);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 2px;
+}
+
+/* 条目列表容器 */
+.sp-prompt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 40px;
+}
+.sp-empty-hint {
+    padding: 14px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+}
+
+/* 单个提示词条目卡片 */
+.sp-prompt-item {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 9px;
+    overflow: hidden;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    user-select: none;
+}
+.sp-prompt-item:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+}
+.sp-prompt-item.is-disabled {
+    opacity: 0.55;
+}
+
+/* 拖拽中的视觉反馈 */
+.sp-prompt-item.is-dragging {
+    opacity: 0.4;
+    border: 1px dashed #3b82f6;
+    transform: scale(0.98);
+}
+.sp-prompt-item.is-drag-over {
+    border-top: 2.5px solid #60a5fa !important;
+    background: rgba(59, 130, 246, 0.12);
+}
+
+/* 特殊条目：内置功能规范卡片专属高级渐变高亮 (紫金-深蓝调) */
+.sp-prompt-item.is-features-slot {
+    background: linear-gradient(135deg, rgba(76, 29, 149, 0.32) 0%, rgba(30, 58, 138, 0.28) 50%, rgba(15, 23, 42, 0.65) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    box-shadow: 0 2px 10px rgba(126, 34, 206, 0.2);
+}
+.sp-prompt-item.is-features-slot:hover {
+    border-color: rgba(192, 132, 252, 0.8);
+    box-shadow: 0 3px 14px rgba(168, 85, 247, 0.28);
+}
+
+/* 兼容旧条目样式 */
+.sp-prompt-item.is-user-slot {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.28) 0%, rgba(15, 23, 42, 0.55) 100%);
+    border: 1px solid rgba(96, 165, 250, 0.45);
+}
+.sp-prompt-item.is-rules-slot {
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.28) 0%, rgba(15, 23, 42, 0.55) 100%);
+    border: 1px solid rgba(192, 132, 252, 0.45);
+}
+
+/* 卡片主横条 */
+.sp-item-bar {
+    display: flex;
+    align-items: center;
+    padding: 7px 8px;
+    gap: 6px;
+}
+
+/* 拖拽手柄 */
+.sp-drag-handle {
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 11px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: color 0.15s, background-color 0.15s;
+    flex-shrink: 0;
+}
+.sp-drag-handle:hover {
+    color: #93c5fd;
+    background: rgba(255, 255, 255, 0.08);
+}
+.sp-drag-handle:active {
+    cursor: grabbing;
+}
+.sp-order-index {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    font-family: monospace;
+}
+
+/* 标题与摘要列 (可点击触发展开/收起) */
+.sp-item-title-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+}
+.sp-item-title-col:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+.sp-item-title-col:active {
+    background: rgba(255, 255, 255, 0.1);
+}
+.sp-item-title-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+.sp-item-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+.sp-item-snippet {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+.sp-prompt-item.is-expanded {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+
+/* 角色标签 */
+.sp-role-pill {
+    font-size: 8.5px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+.role-system {
+    background: rgba(147, 51, 234, 0.22);
+    border: 1px solid rgba(147, 51, 234, 0.4);
+    color: #d8b4fe;
+}
+.role-user {
+    background: rgba(59, 130, 246, 0.22);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
+}
+.role-assistant {
+    background: rgba(16, 185, 129, 0.22);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+}
+
+/* 用户输入插槽徽章 */
+.sp-userslot-badge {
+    font-size: 9px;
+    font-weight: 700;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(245, 158, 11, 0.25) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fde047;
+    padding: 1px 5px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* 作用域标签 (QQ, X, 淘宝) */
+.sp-scope-tag {
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+.scope-all {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.55);
+}
+.scope-qq {
+    background: rgba(14, 165, 233, 0.2);
+    border: 1px solid rgba(14, 165, 233, 0.35);
+    color: #38bdf8;
+}
+.scope-x {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+.scope-taobao {
+    background: rgba(249, 115, 22, 0.2);
+    border: 1px solid rgba(249, 115, 22, 0.35);
+    color: #fb923c;
+}
+
+/* 操作列 */
+.sp-item-actions-col {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+/* 微型移动按钮 */
+.sp-move-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.sp-btn-micro {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 8px;
+    padding: 1px 3px;
+    cursor: pointer;
+    border-radius: 2px;
+    line-height: 1;
+}
+.sp-btn-micro:hover:not(:disabled) {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+}
+.sp-btn-micro:disabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+}
+
+/* 微型滑动开关 */
+.sp-switch-micro {
+    position: relative;
+    display: inline-block;
+    width: 28px;
+    height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.sp-switch-micro input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.sp-switch-slider-micro {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: 0.2s ease;
+    border-radius: 16px;
+}
+.sp-switch-slider-micro:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 1px;
+    bottom: 1px;
+    background-color: #ffffff;
+    transition: 0.2s ease;
+    border-radius: 50%;
+}
+.sp-switch-micro input:checked + .sp-switch-slider-micro {
+    background-color: #2563eb;
+    border-color: #3b82f6;
+}
+.sp-switch-micro input:checked + .sp-switch-slider-micro:before {
+    transform: translateX(12px);
+}
+
+/* 小图标按钮 */
+.sp-btn-icon {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    padding: 3px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.sp-btn-icon:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+.sp-btn-danger:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+}
+.sp-item-chevron {
+    transition: transform 0.2s ease;
+}
+
+/* 内联编辑器面板 */
+.sp-item-editor-body {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 10px;
+    user-select: text !important;
+}
+.sp-item-editor-body * {
+    user-select: text;
+}
+
+.sp-editor-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.sp-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #ffffff;
+    font-size: 11.5px;
+    padding: 6px 8px;
+    outline: none;
+    font-family: inherit;
+    resize: vertical;
+    line-height: 1.4;
+    transition: border-color 0.2s;
+}
+.sp-textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* ==========================================================================
+   内置功能规范 (输入规则 & 回复规则) 专属双规则编辑器样式
+   ========================================================================== */
+.sp-features-slot-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* 顶部功能 Tab 栏与新加功能按钮 */
+.sp-features-bar-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding-bottom: 2px;
+}
+.sp-features-tabs-list {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    flex: 1;
+    align-items: center;
+}
+.sp-features-tabs-list::-webkit-scrollbar {
+    height: 2px;
+}
+.sp-feature-tab-item {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 0 4px;
+    transition: all 0.15s ease;
+}
+.sp-feature-tab-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.sp-feature-tab-item.active {
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.28) 0%, rgba(59, 130, 246, 0.28) 100%);
+    border-color: rgba(168, 85, 247, 0.6);
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.25);
+}
+.sp-feature-tab-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    outline: none;
+}
+.sp-feature-tab-item.active .sp-feature-tab-btn {
+    color: #e9d5ff;
+    font-weight: 600;
+}
+.sp-feature-tab-del-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 9px;
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: color 0.15s, background-color 0.15s;
+}
+.sp-feature-tab-del-btn:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.2);
+}
+.sp-btn-add-feature-toggle {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px dashed rgba(168, 85, 247, 0.45);
+    color: #d8b4fe;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.sp-btn-add-feature-toggle:hover {
+    background: rgba(168, 85, 247, 0.28);
+    border-color: #c084fc;
+    color: #ffffff;
+}
+
+/* 新增内置功能内联抽屉 */
+.sp-new-feature-drawer {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+.sp-new-feature-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+.sp-new-feature-btns {
+    display: flex;
+    gap: 4px;
+}
+
+/* 规则机制与变量说明条 */
+.sp-features-intro-bar {
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.4;
+}
+.sp-features-intro-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(255, 255, 255, 0.85);
+}
+.sp-features-intro-title b {
+    color: #c084fc;
+}
+.sp-features-intro-title code {
+    background: rgba(0, 0, 0, 0.4);
+    color: #93c5fd;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+}
+.sp-features-vars-list {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 9.5px;
+}
+.sp-features-vars-list code {
+    background: rgba(0, 0, 0, 0.4);
+    color: #fde047;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    margin: 0 1px;
+}
+
+/* 核心双规则编辑面板 */
+.sp-features-dual-editors {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sp-rule-editor-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.sp-rule-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.sp-rule-box-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.sp-rule-box-label .text-blue {
+    color: #60a5fa;
+}
+.sp-rule-box-label .text-purple {
+    color: #c084fc;
+}
+.sp-rule-box-hint {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.4);
+}
+.sp-rule-box-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 2px;
+}
+.sp-rule-box-footer code {
+    background: rgba(0, 0, 0, 0.4);
+    color: #93c5fd;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+}
+.sp-save-status {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+/* 特殊插槽专属徽章与 Pill */
+.sp-slot-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.slot-features {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.25) 0%, rgba(59, 130, 246, 0.25) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.55);
+    color: #e9d5ff;
+}
+.slot-user {
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.22) 0%, rgba(245, 158, 11, 0.22) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fde047;
+}
+.slot-rules {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.22) 0%, rgba(147, 51, 234, 0.22) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    color: #e9d5ff;
+}
+.slot-history {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(5, 150, 105, 0.22) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.5);
+    color: #6ee7b7;
+}
+.role-features {
+    background: rgba(168, 85, 247, 0.22);
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    color: #e9d5ff;
+}
+
+/* 特殊条目：正文历史记录插槽卡片专属高亮 (青绿调) */
+.sp-prompt-item.is-history-slot {
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.28) 0%, rgba(15, 23, 42, 0.55) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.45);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12);
+}
+.sp-prompt-item.is-history-slot:hover {
+    border-color: rgba(52, 211, 153, 0.7);
+}
+.role-history {
+    background: rgba(16, 185, 129, 0.22);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    color: #6ee7b7;
+}
+
+/* ==========================================================================
+   记忆管理模块与数字框控件样式
+   ========================================================================== */
+.sp-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+.sp-slider-row .sp-slider {
+    flex: 1;
+}
+.sp-input-number-compact {
+    width: 58px;
+    text-align: center;
+    padding: 6px 4px;
+    font-weight: 700;
+    font-family: monospace;
+    font-size: 13px;
+    color: #93c5fd;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+}
+.sp-input-number-compact:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* 记忆模式提示卡片 */
+.sp-memory-status-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+.sp-memory-status-icon {
+    font-size: 16px;
+    color: #60a5fa;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+.sp-memory-status-text {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.88);
+    line-height: 1.5;
+}
+.sp-memory-status-text b {
+    color: #93c5fd;
+}
+
+/* ==========================================================================
+   正文历史记录插槽 (只读面板与对话时间线气泡)
+   ========================================================================== */
+.sp-history-slot-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sp-history-slot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px dashed rgba(52, 211, 153, 0.25);
+    border-radius: 7px;
+    padding: 6px 9px;
+}
+.sp-history-slot-tip {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.45;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sp-history-slot-tip i {
+    color: #34d399;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.sp-history-slot-tip b {
+    color: #6ee7b7;
+}
+.sp-refresh-history-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #a7f3d0;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.sp-refresh-history-btn:hover {
+    background: rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 211, 153, 0.4);
+    color: #ffffff;
+}
+
+/* 空状态卡片 */
+.sp-history-empty {
+    padding: 16px 12px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.55);
+}
+.sp-history-empty i {
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.25);
+    margin-bottom: 6px;
+    display: block;
+}
+.sp-history-empty p {
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: rgba(255, 255, 255, 0.75);
+}
+.sp-history-empty span {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    line-height: 1.4;
+}
+
+/* 正文对话时间线列表 */
+.sp-history-timeline-summary {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 2px 4px;
+}
+.sp-history-timeline-summary b {
+    color: #34d399;
+}
+.sp-history-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.sp-history-timeline::-webkit-scrollbar {
+    width: 3px;
+}
+.sp-history-timeline::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+.sp-history-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.45;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.sp-history-msg.is-user {
+    background: rgba(30, 58, 138, 0.18);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+.sp-history-msg.is-char {
+    background: rgba(6, 78, 59, 0.18);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+.sp-history-msg-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 9.5px;
+}
+.sp-history-role-tag {
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+.sp-history-role-tag.tag-user {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+}
+.sp-history-role-tag.tag-char {
+    background: rgba(16, 185, 129, 0.25);
+    color: #6ee7b7;
+}
+.sp-history-msg-num {
+    color: rgba(255, 255, 255, 0.35);
+    font-family: monospace;
+}
+.sp-history-msg-content {
+    color: rgba(255, 255, 255, 0.88);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 11px;
+}
+
+/* ==========================================================================
+   QQ 应用程序整体架构与样式 (即时通讯拟真深色主题)
+   ========================================================================== */
+.small-phone-qq-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background-color: #0b1120;
+    color: #f8fafc;
+    position: relative;
+    overflow: hidden;
+}
+
+.sp-qq-main-view,
+.sp-qq-chat-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+/* QQ 顶栏 */
+.sp-qq-header {
+    height: 44px;
+    background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+.sp-qq-back-home-btn,
+.sp-qq-chat-back-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+.sp-qq-back-home-btn:hover,
+.sp-qq-chat-back-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+.sp-qq-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+}
+.sp-qq-status-dot {
+    width: 7px;
+    height: 7px;
+    background-color: #22c55e;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #22c55e;
+}
+.sp-qq-icon-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+.sp-qq-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #60a5fa;
+}
+
+/* 顶部操作下拉菜单 */
+.sp-qq-dropdown-menu {
+    position: absolute;
+    top: 48px;
+    right: 8px;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 50;
+    min-width: 175px;
+    animation: spFadeInDown 0.18s ease-out;
+}
+.sp-qq-dropdown-item {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 11.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+.sp-qq-dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.22);
+    color: #93c5fd;
+}
+.sp-qq-dropdown-item i {
+    width: 14px;
+    text-align: center;
+    color: #60a5fa;
+}
+
+/* 导航 Tabs */
+.sp-qq-nav-tabs {
+    display: flex;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+.sp-qq-nav-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 9px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.18s ease;
+}
+.sp-qq-nav-tab:hover {
+    color: rgba(255, 255, 255, 0.85);
+}
+.sp-qq-nav-tab.active {
+    color: #60a5fa;
+    border-bottom-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.06);
+}
+
+/* 内容主体与列表 */
+.sp-qq-body {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+}
+.sp-qq-tab-pane {
+    height: 100%;
+}
+.sp-qq-chat-list,
+.sp-qq-contacts-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 空状态 */
+.sp-qq-empty-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 20px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+}
+.sp-qq-empty-box i {
+    font-size: 32px;
+    margin-bottom: 10px;
+    color: rgba(255, 255, 255, 0.2);
+}
+.sp-qq-empty-box p {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0 0 4px 0;
+}
+.sp-qq-empty-box span {
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+/* 头像通用 */
+.sp-qq-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    user-select: none;
+}
+
+/* 消息列表项 */
+.sp-qq-chat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.sp-qq-chat-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.sp-qq-chat-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.sp-qq-chat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.sp-qq-chat-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+}
+.sp-qq-chat-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+}
+.sp-qq-chat-snippet {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 联系人列表项 */
+.sp-qq-contacts-count {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 8px 12px 4px 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.sp-qq-contact-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.sp-qq-contact-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.sp-qq-contact-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+.sp-qq-contact-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+.sp-qq-contact-remark {
+    font-size: 11px;
+    color: #60a5fa;
+}
+.sp-qq-contact-num {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.35);
+    font-family: monospace;
+    margin-left: auto;
+}
+.sp-qq-contact-subtext {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+.sp-qq-contact-sig {
+    color: rgba(255, 255, 255, 0.45);
+}
+.sp-qq-contact-sig-empty {
+    color: rgba(255, 255, 255, 0.22);
+    font-style: italic;
+}
+.sp-qq-world-tag {
+    font-size: 9px;
+    background: rgba(147, 51, 234, 0.16);
+    border: 1px solid rgba(147, 51, 234, 0.3);
+    color: #d8b4fe;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+/* ==========================================================================
+   私聊会话视窗 (Chat Page)
+   ========================================================================== */
+.sp-qq-chat-header {
+    height: 48px;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    z-index: 10;
+}
+.sp-qq-chat-header-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+}
+.sp-qq-chat-target-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sp-qq-chat-target-status {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+.sp-qq-online-badge {
+    color: #22c55e;
+}
+
+/* 消息流区域 */
+.sp-qq-chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.sp-qq-chat-notice {
+    text-align: center;
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 0 auto 2px auto;
+}
+.sp-qq-msg-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    width: 100%;
+}
+.sp-qq-msg-row.is-other {
+    justify-content: flex-start;
+}
+.sp-qq-msg-row.is-self {
+    justify-content: flex-end;
+}
+.sp-qq-msg-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+    margin-top: 1px;
+}
+.sp-qq-msg-avatar.is-self-avatar {
+    background-color: #2563eb;
+    font-size: 9.5px;
+}
+
+/* 对话气泡：紧凑饱满，消除上下多余空隙 */
+.sp-qq-msg-bubble {
+    max-width: 80%;
+    padding: 4px 8px;
+    font-size: var(--sp-chat-font-size, 11.5px);
+    line-height: 1.35;
+    word-break: break-word;
+    white-space: pre-line;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.sp-qq-msg-row.is-other .sp-qq-msg-bubble {
+    background: rgba(30, 41, 59, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+    border-radius: 3px 9px 9px 9px;
+}
+.sp-qq-msg-row.is-self .sp-qq-msg-bubble {
+    background: #2563eb;
+    color: #ffffff;
+    border-radius: 9px 3px 9px 9px;
+}
+
+/* 打字动效紧凑适配 */
+.sp-qq-msg-bubble.is-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 5px 8px;
+}
+.sp-typing-dot {
+    width: 4px;
+    height: 4px;
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    animation: spTypingBlink 1.4s infinite ease-in-out both;
+}
+.sp-typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.sp-typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes spTypingBlink {
+    0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+.sp-qq-msg-error {
+    text-align: center;
+    font-size: 10px;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 4px auto;
+}
+
+/* 底部输入框 */
+.sp-qq-chat-footer {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px 10px;
+    flex-shrink: 0;
+}
+.sp-qq-chat-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 3px 6px 3px 12px;
+    transition: border-color 0.2s;
+}
+.sp-qq-chat-input-bar:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.sp-qq-chat-textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 12px;
+    font-family: inherit;
+    resize: none;
+    padding: 5px 0;
+    max-height: 80px;
+    line-height: 1.4;
+}
+.sp-qq-send-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #2563eb;
+    border: none;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.15s, background 0.15s;
+}
+.sp-qq-send-btn:hover:not(:disabled) {
+    background: #1d4ed8;
+    transform: scale(1.05);
+}
+.sp-qq-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 工具箱小图标按钮（置于输入框左侧） */
+.sp-qq-toolbox-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #94a3b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+    margin-right: 2px;
+}
+.sp-qq-toolbox-btn:hover,
+.sp-qq-toolbox-btn.is-active {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.6);
+    color: #60a5fa;
+    transform: scale(1.08);
+}
+.sp-qq-toolbox-btn:active {
+    transform: scale(0.95);
+}
+
+/* 点击工具箱小图标弹出的两个按键面板（默认隐藏，仅在 .is-open 时激活展示） */
+.sp-qq-toolbox-panel {
+    display: none !important;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 10px;
+    z-index: 100;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.sp-qq-toolbox-panel.is-open {
+    display: flex !important;
+    animation: sp-toolbox-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes sp-toolbox-pop {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+.sp-qq-toolbox-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+    font-size: 11.5px;
+    font-weight: 500;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+.sp-qq-toolbox-action-btn:hover {
+    background: rgba(59, 130, 246, 0.28);
+    border-color: rgba(59, 130, 246, 0.6);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+.sp-qq-toolbox-action-btn i {
+    font-size: 12px;
+    color: #38bdf8;
+    transition: transform 0.15s ease;
+}
+.sp-qq-toolbox-action-btn:hover i {
+    color: #60a5fa;
+    transform: scale(1.1);
+}
+
+/* 发送按钮：停止发送状态（红色方块+脉冲呼吸动效） */
+.sp-qq-send-btn.is-generating {
+    background: #ef4444 !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.6) !important;
+    animation: sp-pulse-stop 1.4s infinite ease-in-out !important;
+}
+.sp-qq-send-btn.is-generating:hover {
+    background: #dc2626 !important;
+    transform: scale(1.08) !important;
+}
+@keyframes sp-pulse-stop {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+    }
+    50% {
+        opacity: 0.82;
+        transform: scale(0.96);
+        box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+    }
+}
+
+/* 多选删除操作底部栏 */
+.sp-qq-multiselect-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 6px 4px 12px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 20px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
+}
+.sp-qq-multiselect-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sp-qq-multiselect-count {
+    font-size: 11.5px;
+    color: #93c5fd;
+    font-weight: 600;
+}
+.sp-qq-multiselect-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sp-qq-batch-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.sp-qq-batch-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+.sp-qq-batch-btn.is-cancel:hover {
+    background: rgba(148, 163, 184, 0.2);
+}
+.sp-qq-batch-btn.is-danger {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+.sp-qq-batch-btn.is-danger:hover:not(:disabled) {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+.sp-qq-batch-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 多选复选框与高亮选中间距 */
+.sp-qq-msg-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    align-self: center;
+}
+.sp-qq-msg-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+.sp-qq-msg-row.is-selected {
+    background: rgba(59, 130, 246, 0.14) !important;
+    border-radius: 6px !important;
+    outline: 1px dashed rgba(59, 130, 246, 0.4);
+}
+
+/* ==========================================================================
+   弹窗通用与世界书一键多选导入卡片
+   ========================================================================== */
+.sp-qq-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 10px;
+    animation: spFadeIn 0.15s ease-out;
+}
+.sp-qq-modal-card {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    width: 100%;
+    max-height: 88%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+.sp-qq-modal-header {
+    height: 42px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    flex-shrink: 0;
+}
+.sp-qq-modal-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sp-qq-modal-title i {
+    color: #60a5fa;
+}
+.sp-qq-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+}
+.sp-qq-modal-close:hover {
+    color: #ffffff;
+}
+.sp-qq-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sp-qq-modal-footer {
+    height: 48px;
+    background: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 12px;
+    flex-shrink: 0;
+}
+
+/* 世界书选择栏与工具条 */
+.sp-qq-modal-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+}
+.sp-qq-bound-info-bar {
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    border-radius: 8px;
+    padding: 6px 10px;
+    justify-content: space-between;
+}
+.sp-qq-bound-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #93c5fd;
+    font-weight: 500;
+    min-width: 0;
+}
+.sp-qq-bound-badge span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sp-qq-entry-world-badge {
+    font-size: 9px;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.15);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+.sp-qq-contacts-header-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 6px 4px;
+}
+.sp-qq-char-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: #60a5fa;
+    background: rgba(37, 99, 235, 0.18);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+.sp-qq-world-select {
+    flex: 1;
+    padding: 5px 8px;
+    font-size: 11px;
+}
+/* 联系人界面顶部搜索栏 */
+.sp-qq-contacts-search-header {
+    padding: 8px 10px 5px 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(15, 23, 42, 0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sp-qq-contacts-search-header .sp-qq-search-box {
+    margin-bottom: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 5px 9px;
+    height: 30px;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+}
+.sp-qq-contacts-search-header .sp-qq-search-box:focus-within {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.sp-qq-contacts-search-header .sp-qq-search-input {
+    font-size: 11.5px;
+}
+
+/* 世界书条目搜索框 */
+.sp-qq-search-box {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 5px 9px;
+    margin-bottom: 6px;
+    gap: 7px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sp-qq-search-box:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.sp-qq-search-icon {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    flex-shrink: 0;
+}
+.sp-qq-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 11px;
+    padding: 0;
+    min-width: 0;
+}
+.sp-qq-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+.sp-qq-search-clear-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+}
+.sp-qq-search-clear-btn:hover {
+    color: #f87171;
+}
+
+.sp-qq-select-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+}
+.sp-qq-select-btns {
+    display: flex;
+    gap: 6px;
+}
+.sp-qq-select-count {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #60a5fa;
+}
+
+/* 条目多选卡片列表 */
+.sp-qq-import-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+.sp-qq-import-entry-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.sp-qq-import-entry-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.sp-qq-import-entry-card.is-selected {
+    background: rgba(37, 99, 235, 0.16);
+    border-color: rgba(59, 130, 246, 0.55);
+}
+.sp-qq-entry-chk-col {
+    padding-top: 2px;
+}
+.sp-qq-entry-checkbox {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+.sp-qq-entry-content-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.sp-qq-entry-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.sp-qq-entry-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+}
+.sp-qq-entry-uid {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+    font-family: monospace;
+}
+.sp-qq-entry-keys-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.sp-qq-entry-key {
+    font-size: 8.5px;
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.sp-qq-entry-snippet {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.sp-qq-loading-hint {
+    text-align: center;
+    padding: 30px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+/* ==========================================================================
+   酒馆正文内嵌手机互动记录折叠框样式 (Narrative Phone Log)
+   ========================================================================== */
+details.narrative-phone-log {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: inherit;
+    transition: all 0.2s ease-in-out;
+}
+
+details.narrative-phone-log:hover {
+    border-color: rgba(96, 165, 250, 0.4);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+}
+
+details.narrative-phone-log summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95em;
+    user-select: none;
+    color: #60a5fa;
+    outline: none;
+    padding: 2px 0;
+    transition: color 0.15s ease;
+}
+
+details.narrative-phone-log summary:hover {
+    color: #93c5fd;
+}
+
+details.narrative-phone-log[open] summary {
+    margin-bottom: 10px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+    padding-bottom: 6px;
+}
+
+/* ==========================================================================
+   操作日志独立应用样式 (Windows 11 Fluent 极简风格，纯操作状态，0提示词)
+   ========================================================================== */
+.sp-log-page {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: #0b1120;
+    color: #e2e8f0;
+    z-index: 10;
+    overflow: hidden;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* 顶栏 */
+.sp-log-header {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sp-log-back-btn {
+    background: transparent;
+    border: none;
+    color: #38bdf8;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: background-color 0.15s, opacity 0.15s;
+}
+
+.sp-log-back-btn:hover {
+    background: rgba(56, 189, 248, 0.12);
+}
+
+.sp-log-header-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-log-header-title i {
+    color: #38bdf8;
+    font-size: 13px;
+}
+
+.sp-log-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sp-log-icon-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.sp-log-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+}
+
+.sp-log-icon-btn.text-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+/* 日志设置抽屉 (Windows 11 Fluent 风格) */
+.sp-log-settings-drawer {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 8px 12px 10px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.sp-log-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.sp-log-drawer-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sp-log-drawer-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.sp-log-drawer-close:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sp-log-setting-field label {
+    display: block;
+    font-size: 11px;
+    color: #cbd5e1;
+    margin-bottom: 5px;
+}
+
+.sp-log-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.sp-log-num-input {
+    width: 100px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.sp-log-quick-tags {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.sp-log-tag-btn {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    color: #38bdf8;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sp-log-tag-btn:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+.sp-log-hint-text {
+    font-size: 10px;
+    color: #64748b;
+    display: block;
+    line-height: 1.35;
+}
+
+.sp-stat-max {
+    font-size: 10px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* 顶部统计胶囊条 */
+.sp-log-stats-bar {
+    padding: 8px 10px 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.5);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sp-log-stat-pill {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sp-log-stat-pill.is-success {
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.sp-log-stat-pill.is-error {
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.sp-stat-num {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.sp-stat-num.text-success {
+    color: #4ade80;
+}
+
+.sp-stat-num.text-danger {
+    color: #f87171;
+}
+
+.sp-stat-label {
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+/* 日志流容器 */
+.sp-log-stream {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sp-log-stream::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sp-log-stream::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 4px;
+}
+
+/* 单条日志卡片 */
+.sp-log-item {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid #38bdf8;
+    border-radius: 6px;
+    padding: 6px 8px;
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.sp-log-item:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sp-log-item.status-success {
+    border-left-color: #22c55e;
+}
+
+.sp-log-item.status-error {
+    border-left-color: #ef4444;
+}
+
+.sp-log-item.status-info {
+    border-left-color: #38bdf8;
+}
+
+.sp-log-item.status-warning {
+    border-left-color: #f59e0b;
+}
+
+.sp-log-item-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-log-time {
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.sp-log-module-tag {
+    font-size: 10px;
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+    padding: 1px 4px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+.sp-log-action {
+    font-size: 11px;
+    font-weight: 600;
+    color: #f1f5f9;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-log-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.sp-log-badge.badge-success {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+}
+
+.sp-log-badge.badge-error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+.sp-log-badge.badge-info {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+}
+
+.sp-log-detail {
+    margin-top: 4px;
+    font-size: 10.5px;
+    color: #94a3b8;
+    line-height: 1.35;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 空状态 */
+.sp-log-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    color: #64748b;
+    text-align: center;
+}
+
+.sp-log-empty-state i {
+    font-size: 32px;
+    color: #475569;
+    margin-bottom: 10px;
+}
+
+.sp-log-empty-state span {
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 4px;
+}
+
+.sp-log-empty-state p {
+    font-size: 11px;
+    color: #64748b;
+    margin: 0;
+}
+
+/* ==========================================================================
+   QQ 群聊专属视觉样式
+   ========================================================================== */
+.sp-qq-group-picker-item:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.sp-qq-group-picker-item.selected {
+    background: rgba(56, 189, 248, 0.16) !important;
+    border-color: rgba(56, 189, 248, 0.4) !important;
+}
+
+.sp-qq-group-contact-item {
+    background: rgba(16, 185, 129, 0.05) !important;
+    border-radius: 8px !important;
+    margin-bottom: 2px !important;
+}
+
+.sp-qq-group-contact-item:hover {
+    background: rgba(16, 185, 129, 0.12) !important;
+}
+
+.sp-qq-msg-sender-name {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 2px;
+    padding-left: 2px;
+    line-height: 1;
+    font-weight: 500;
+}
+
+/* ==========================================================================
+   设置页：显示与外观微调卡片、快捷标签及实时预览框
+   ========================================================================== */
+.sp-font-adjust-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+}
+
+.sp-font-adjust-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sp-font-adjust-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+}
+
+.sp-font-adjust-btn:active {
+    transform: scale(0.95);
+}
+
+.sp-quick-tags-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.sp-tag-btn {
+    padding: 3px 8px;
+    font-size: 10.5px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.sp-tag-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+}
+
+.sp-tag-btn.is-active {
+    background: #2563eb;
+    border-color: #3b82f6;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.sp-font-preview-box {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+}
+
+.sp-font-preview-title {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ==========================================================================
+   淘宝应用专属样式 (淘宝橙主题，极简高质感)
+   ========================================================================== */
+.sp-taobao-page {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: #0f172a;
+    color: #f8fafc;
+    z-index: 10;
+    overflow: hidden;
+    user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* 顶栏：淘宝橙渐变 */
+.sp-taobao-header {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #ff5000 0%, #ff7300 100%);
+    box-shadow: 0 2px 8px rgba(255, 80, 0, 0.25);
+    z-index: 5;
+    flex-shrink: 0;
+}
+
+.sp-taobao-back-btn {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background 0.15s ease;
+}
+
+.sp-taobao-back-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* 顶栏双 Tab 切换胶囊 */
+.sp-taobao-tab-switch {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 14px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.sp-taobao-tab-btn {
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.sp-taobao-tab-btn.is-active {
+    background: #ffffff;
+    color: #ff5000;
+    font-weight: 700;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.sp-taobao-badge {
+    background: rgba(255, 80, 0, 0.15);
+    color: #ff5000;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 4px;
+    border-radius: 8px;
+    line-height: 1.2;
+}
+
+.sp-taobao-tab-btn:not(.is-active) .sp-taobao-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* 顶栏右侧操作按钮 */
+.sp-taobao-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sp-taobao-icon-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #ffffff;
+    font-size: 13px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.sp-taobao-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.sp-taobao-icon-btn:active {
+    transform: scale(0.92);
+}
+
+.sp-taobao-icon-btn i.is-spinning {
+    animation: fa-spin 0.8s linear infinite;
+}
+
+/* 淘宝额外偏好/要求搜索栏 */
+.sp-taobao-search-bar {
+    padding: 6px 8px;
+    background: #1e293b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.sp-taobao-search-box {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 15px;
+    padding: 0 8px 0 10px;
+    height: 28px;
+    transition: all 0.2s ease;
+}
+
+.sp-taobao-search-box:focus-within {
+    border-color: #ff5000;
+    box-shadow: 0 0 0 2px rgba(255, 80, 0, 0.2);
+    background: rgba(15, 23, 42, 0.95);
+}
+
+.sp-taobao-search-icon {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.sp-taobao-search-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: #f1f5f9;
+    font-size: 11px;
+    padding: 0;
+    width: 100%;
+}
+
+.sp-taobao-search-input::placeholder {
+    color: #64748b;
+    font-size: 10.5px;
+}
+
+.sp-taobao-search-clear {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease;
+}
+
+.sp-taobao-search-clear:hover {
+    color: #cbd5e1;
+}
+
+.sp-taobao-search-submit-btn {
+    border: none;
+    background: linear-gradient(135deg, #ff5000 0%, #ff7300 100%);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0 10px;
+    height: 28px;
+    border-radius: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(255, 80, 0, 0.28);
+    transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.sp-taobao-search-submit-btn:hover {
+    filter: brightness(1.08);
+}
+
+.sp-taobao-search-submit-btn:active {
+    transform: scale(0.95);
+}
+
+/* 主内容滚动区 */
+.sp-taobao-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.sp-taobao-products-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+/* 商品卡片：精致轻奢 */
+.sp-taobao-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s ease;
+}
+
+.sp-taobao-card:hover {
+    border-color: rgba(255, 80, 0, 0.35);
+    background: rgba(30, 41, 59, 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(255, 80, 0, 0.12);
+}
+
+.sp-taobao-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.sp-taobao-card-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1.3;
+    word-break: break-word;
+    flex: 1;
+}
+
+.sp-taobao-card-price {
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #ff5000;
+    white-space: nowrap;
+    letter-spacing: -0.2px;
+}
+
+.sp-taobao-card-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+/* 卡片操作按钮行 */
+.sp-taobao-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 3px;
+    padding-top: 5px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.sp-taobao-act-btn {
+    border: none;
+    font-size: 11px;
+    padding: 3.5px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+/* 收藏按钮 */
+.sp-taobao-act-btn.sp-btn-fav {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+
+.sp-taobao-act-btn.sp-btn-fav:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+}
+
+.sp-taobao-act-btn.sp-btn-fav.is-favorited {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+/* 发给联系人按钮 */
+.sp-taobao-act-btn.sp-btn-send-contact {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.sp-taobao-act-btn.sp-btn-send-contact:hover {
+    background: rgba(59, 130, 246, 0.28);
+    border-color: #60a5fa;
+    color: #ffffff;
+}
+
+.sp-taobao-act-btn.sp-btn-send-contact:active {
+    transform: scale(0.94);
+}
+
+/* 发送按钮 */
+.sp-taobao-act-btn.sp-btn-send {
+    background: #ff5000;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(255, 80, 0, 0.35);
+}
+
+.sp-taobao-act-btn.sp-btn-send:hover {
+    background: #ff651a;
+    box-shadow: 0 2px 6px rgba(255, 80, 0, 0.5);
+}
+
+.sp-taobao-act-btn.sp-btn-send:active {
+    transform: scale(0.94);
+}
+
+/* 空状态与加载中提示框 */
+.sp-taobao-loading-box,
+.sp-taobao-empty-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 36px 16px;
+    text-align: center;
+    gap: 8px;
+}
+
+.sp-taobao-spinner {
+    font-size: 26px;
+    color: #ff5000;
+    margin-bottom: 4px;
+}
+
+.sp-taobao-loading-text {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.sp-taobao-loading-sub {
+    font-size: 10.5px;
+    color: #64748b;
+}
+
+.sp-taobao-empty-icon {
+    font-size: 32px;
+    color: rgba(255, 255, 255, 0.25);
+    margin-bottom: 2px;
+}
+
+.sp-taobao-empty-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.sp-taobao-empty-desc {
+    font-size: 11px;
+    color: #64748b;
+    max-width: 220px;
+    line-height: 1.35;
+}
+
+/* 淘宝设置弹窗 */
+.sp-taobao-modal-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.sp-taobao-modal-card {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 260px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: spModalPop 0.2s cubic-bezier(0.18, 0.9, 0.3, 1.15) forwards;
+}
+
+@keyframes spModalPop {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.sp-taobao-modal-header {
+    height: 38px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15, 23, 42, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 12px;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.sp-taobao-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.sp-taobao-modal-close:hover {
+    color: #ffffff;
+}
+
+.sp-taobao-modal-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sp-taobao-modal-footer {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.4);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 淘宝联系人选择弹窗样式 */
+.sp-taobao-contact-picker-card {
+    max-width: 270px;
+    max-height: 82%;
+}
+
+.sp-taobao-contact-product-tip {
+    padding: 7px 12px;
+    background: rgba(255, 80, 0, 0.08);
+    border-bottom: 1px solid rgba(255, 80, 0, 0.15);
+    font-size: 11px;
+    color: #fed7aa;
+    line-height: 1.35;
+    word-break: break-all;
+}
+
+.sp-taobao-contacts-picker-body {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sp-taobao-contact-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.sp-taobao-contact-item:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateX(2px);
+}
+
+.sp-taobao-contact-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: #ffffff;
+    font-size: 11.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sp-taobao-contact-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.sp-taobao-contact-name-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sp-taobao-contact-name {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-contact-type-tag {
+    font-size: 9px;
+    padding: 0 4px;
+    border-radius: 4px;
+    line-height: 1.25;
+}
+
+.sp-contact-type-tag.tag-group {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.sp-contact-type-tag.tag-friend {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+.sp-taobao-contact-sub {
+    font-size: 10px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-taobao-contact-arrow {
+    color: #64748b;
+    font-size: 11px;
+}
+
+.sp-taobao-contact-item:hover .sp-taobao-contact-arrow {
+    color: #ff5000;
+}
+

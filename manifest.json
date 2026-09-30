@@ -1,0 +1,11 @@
+{
+    "display_name": "SmallPhone",
+    "loading_order": 120,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Luker Developer",
+    "version": "1.0.1",
+    "homePage": "https://github.com/funnycups/Luker"
+}
