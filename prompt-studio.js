@@ -346,10 +346,11 @@ export class PromptStudio {
         const featureTabsHtml = Object.values(features).map(feat => {
             const isActive = feat.id === curFeat.id;
             const iconClass = feat.icon || 'fa-cubes';
+            const iconPrefix = (iconClass.startsWith('fa-qq') || iconClass.startsWith('fa-x-twitter') || iconClass.includes('brands')) ? 'fa-brands' : 'fa-solid';
             return `
                 <div class="sp-feature-tab-item ${isActive ? 'active' : ''}">
                     <button type="button" class="sp-feature-tab-btn" data-feature-id="${feat.id}">
-                        <i class="fa-solid ${iconClass}"></i> ${feat.name}
+                        <i class="${iconPrefix} ${iconClass}"></i> ${feat.name}
                     </button>
                     ${feat.isCustom ? `
                         <button type="button" class="sp-feature-tab-del-btn" data-feature-id="${feat.id}" title="删除该功能">
@@ -399,8 +400,9 @@ export class PromptStudio {
                         <span>当前正在编辑：<b>${curFeat.name}</b> (标识: <code>${curFeat.id}</code>)</span>
                     </div>
                     <div class="sp-features-vars-list">
-                        <div><b>常用变量：</b><code>{{phase}}</code> (场景) · <code>{{user_name}}</code> 用户 · <code>{{char_name}}</code> 角色 · <code>{{message}}</code> 消息 · <code>{{lorebook}}</code> 世界书 · <code>{{extra_requirement}}</code> (淘宝界面额外要求)</div>
-                        <div style="margin-top: 3px;"><b>条件分支语法：</b><code>{% if phase == "单聊" %}...{% elif phase == "群聊" %}...{% else %}...{% endif %}</code></div>
+                        <div><b>常用通用变量：</b><code>{{phase}}</code> 场景 · <code>{{user_name}}</code> 用户 · <code>{{char_name}}</code> 角色 · <code>{{message}}</code> 消息 · <code>{{lorebook}}</code> 世界书</div>
+                        <div style="margin-top: 3px;"><b>专属变量：</b>X: <code>{{guidance}}</code> (意图引导词) | QQ: <code>{{group_name}}</code>, <code>{{group_members}}</code> | 淘宝: <code>{{extra_requirement}}</code></div>
+                        <div style="margin-top: 3px;"><b>条件分支语法：</b><code>{% if phase == "x_trending" %}...{% elif phase == "x_feed" %}...{% else %}...{% endif %}</code></div>
                     </div>
                 </div>
 
@@ -417,7 +419,7 @@ export class PromptStudio {
                         </div>
                         <textarea class="sp-textarea sp-feat-input-textarea" rows="5" data-feature-id="${curFeat.id}" placeholder="支持分支，例如：&#10;{% if phase == &quot;单聊&quot; %}&#10;{{user_name}} 对 {{char_name}} 发送了QQ消息：“{{message}}”&#10;{% elif phase == &quot;群聊&quot; %}&#10;{{user_name}} 在群聊中发送了QQ消息：“{{message}}”&#10;{% endif %}">${curFeat.inputRule || ''}</textarea>
                         <div class="sp-rule-box-footer">
-                            <span>提示：支持 <code>if phase == "单聊"</code> 与 <code>phase == "群聊"</code> 分流不同模板</span>
+                            <span>提示：支持 <code>if phase == ...</code> 分流不同模板</span>
                             <span class="sp-save-status">修改即时保存</span>
                         </div>
                     </div>
@@ -488,6 +490,13 @@ export class PromptStudio {
         this.$container.find('.sp-filter-tab').off('click').on('click', (e) => {
             const filter = $(e.currentTarget).data('filter');
             this.currentFilter = filter;
+            if (['qq', 'x', 'taobao'].includes(filter)) {
+                PromptManager.setActiveFeatureKey(filter);
+                const slot = PromptManager.getAppFeaturesSlot();
+                if (slot) {
+                    this.expandedItemIds.add(slot.id);
+                }
+            }
             this.$container.find('.sp-filter-tab').removeClass('active');
             $(e.currentTarget).addClass('active');
             this._renderListItems();

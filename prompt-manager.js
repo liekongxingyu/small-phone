@@ -56,8 +56,110 @@ export class PromptManager {
                 id: 'x',
                 name: 'X (推特)',
                 icon: 'fa-x-twitter',
-                inputRule: '{{sender_name}}在X上发布了推文并艾特了你：“{{content}}”',
-                replyRule: '你正在使用X (Twitter)。请以推特推文/回复的格式输出：短小精悍、风格鲜明、字数在280字以内，符合推特社交互动习惯。',
+                inputRule: `{% if phase == "x_trending" %}
+{{user_name}} 正在浏览 X 实时热搜榜单。
+{% if guidance %}【关注倾向/关键词】：{{guidance}}{% endif %}
+{% elif phase == "x_post_react" %}
+{{user_name}} 在 X 上发布了一条新动态：“{{tweet_content}}”。其他角色看到后前来跟帖互动。
+{% elif phase == "x_reply_react" %}
+{{user_name}} 在推文（作者：{{tweet_author}}：“{{tweet_content}}”）下发表了评论：“{{reply_content}}”。其他角色对此做出回应。
+{% else %}
+{{user_name}} 打开了 X，正在刷新动态流浏览全网推文。
+{% if guidance %}【关注倾向/关键词】：{{guidance}}{% endif %}
+{% endif %}`,
+                replyRule: `{% if phase == "x_trending" %}
+【场景设定：社交平台 X · 热搜榜单】
+你现在是社交媒体平台【X】的热搜榜单引擎。结合世界观与重大事件背景，生成一份具有真实社交媒体讨论热度的 Top 10 热搜榜单。
+【参考背景信息】：
+{{lorebook}}
+{% if guidance %}【指定关注风向】：请围绕核心事件【{{guidance}}】展开衍生词条。{% endif %}
+【要求】：
+1. 词条格式采用典型的话题标签 #话题名#。第 1~3 名可标记“爆”、“热”、“新”等状态，并配以合理热度值（如“188.5万”）。
+2. 提供核心看点（summary）和 1~2 条围绕该话题讨论的角色/路人推文（sample_tweets）。
+3. 严禁包含转发/转推相关字段，严禁输出小说长篇大论，必须且只能输出严格合法的标准 JSON 数组：
+[
+  {
+    "rank": 1,
+    "tag": "#话题标签#",
+    "tag_type": "爆",
+    "heat": "188.5万",
+    "summary": "话题核心事件简述",
+    "sample_tweets": [
+      { "author_name": "角色名", "content": "讨论内容" }
+    ]
+  }
+]
+{% elif phase == "x_post_react" %}
+【场景设定：社交平台 X · 动态互动跟评】
+{{user_name}} 刚刚在 X 平台发布了一条动态：“{{tweet_content}}”。
+请根据当前世界观与角色性格设定，由 1~3 位与发推内容相关或熟识的角色（也可包含 1 名路人/匿名网友）发表真实跟帖评论或吐槽互动。
+【参考背景信息】：
+{{lorebook}}
+【要求】：
+1. 评论必须紧扣发推内容，符合各自角色说话语气（如傲娇吐槽、宠溺回应、好奇提问、打趣调侃等，每条 10~60 字）。
+2. 必须且只能输出严格合法的标准 JSON 数组：
+[
+  {
+    "author_name": "角色名",
+    "author_handle": "handle",
+    "content": "评论回复内容"
+  }
+]
+{% elif phase == "x_reply_react" %}
+【场景设定：社交平台 X · 楼中楼对话回响】
+在推文（作者：{{tweet_author}}：“{{tweet_content}}”）下，{{user_name}} 发表了评论：“{{reply_content}}”。
+请根据人设，由原推作者或被评论的相关角色对 {{user_name}} 的言论进行 1~2 条后续回应、反驳、接话或附和。
+【参考背景信息】：
+{{lorebook}}
+【要求】：
+1. 回应针对性强，生活化、口语化，展现真实的推特评论区互动氛围（10~50 字）。
+2. 必须且只能输出严格合法的标准 JSON 数组：
+[
+  {
+    "author_name": "角色名",
+    "author_handle": "handle",
+    "content": "回应内容"
+  }
+]
+{% else %}
+【场景设定：社交平台 X · 动态流】
+你现在是社交媒体平台【X】的动态流生成引擎。根据当前世界观与角色性格设定，模拟生成 6~20 条真实、生动且极富生活气息的角色日常推文。
+【参考背景信息】：
+{{lorebook}}
+{% if guidance %}【指定题材方向】：请围绕【{{guidance}}】展开推文。{% endif %}
+【要求】：
+1. 角色人设高度还原，语气符合特质（如傲娇、溺爱、腹黑、高冷等），内容为生活琐事、吐槽、工作碎碎念等（15~80字）。
+2. 推文中可以包含图片或视频，在正文内容中附上对应的括号描述即可（例如：[图片：描述画面细节] 或 [视频：描述动态片段]），以增强动态的画面感与真实感。
+3. 刷新推文时也可以有匿名的帖子（设置 is_anonymous: true，author_name 类似“匿名网友_1234”或特定代号），体现社交平台的树洞、八卦或吐槽文化。
+4. 允许部分推文带有 4~6 条随机角色的跟帖评论（comments），体现角色间斗嘴或吐槽。
+5. 严禁包含转发/转推相关字段，严禁输出小说旁白，必须且只能输出严格合法的标准 JSON 数组：
+[
+  {
+    "id": "tweet_1",
+    "author_name": "角色名",
+    "author_handle": "handle",
+    "is_anonymous": false,
+    "time_ago": "15分钟前",
+    "content": "推文正文，例如：今天的红茶泡得有点浓了 [图片：冒着热气的红茶杯与微焦的玛德琳蛋糕]",
+    "likes": 28,
+    "comments": [
+      { "author_name": "跟评角色名", "author_handle": "handle", "content": "跟评内容" }
+    ]
+  },
+  {
+    "id": "tweet_2",
+    "author_name": "匿名校友_8821",
+    "author_handle": "anon_8821",
+    "is_anonymous": true,
+    "time_ago": "28分钟前",
+    "content": "刚才路过学生会办公室门口，居然听到会长在偷偷练歌？！[视频：晃动的走廊与隐约传出的歌声，时长15秒]",
+    "likes": 53,
+    "comments": [
+      { "author_name": "路人同学", "author_handle": "student_b", "content": "真的假的？！求细说！" }
+    ]
+  }
+]
+{% endif %}`,
                 isCustom: false,
             },
             taobao: {
@@ -192,6 +294,25 @@ export class PromptManager {
                     }
                 } else {
                     featuresSlot.features.taobao = this.getDefaultFeatures().taobao;
+                    updated = true;
+                }
+
+                // 1.3 X (推特) 功能平滑升级：名称统一为“X (推特)”，提示词升级并支持 phase (x_feed / x_trending)、guidance 意图引导与 lorebook
+                if (featuresSlot.features.x) {
+                    const xFeat = featuresSlot.features.x;
+                    const defX = this.getDefaultFeatures().x;
+                    if (xFeat.name !== 'X (推特)') {
+                        xFeat.name = 'X (推特)';
+                        updated = true;
+                    }
+                    if (!xFeat.replyRule || !xFeat.replyRule.includes('x_trending') || !xFeat.replyRule.includes('x_post_react') || !xFeat.inputRule || !xFeat.inputRule.includes('x_trending') || xFeat.inputRule.includes('4~6') || !xFeat.replyRule.includes('图片')) {
+                        xFeat.inputRule = defX.inputRule;
+                        xFeat.replyRule = defX.replyRule;
+                        xFeat.icon = 'fa-x-twitter';
+                        updated = true;
+                    }
+                } else {
+                    featuresSlot.features.x = this.getDefaultFeatures().x;
                     updated = true;
                 }
             }
@@ -413,6 +534,13 @@ export class PromptManager {
                 activeFeatureKey: 'qq',
                 features: this.getDefaultFeatures(),
             };
+        } else if (featuresSlot.features) {
+            if (!featuresSlot.features.x) {
+                featuresSlot.features.x = this.getDefaultFeatures().x;
+            }
+            if (!featuresSlot.features.taobao) {
+                featuresSlot.features.taobao = this.getDefaultFeatures().taobao;
+            }
         }
 
         // 保留现有的历史记录插槽
@@ -531,7 +659,7 @@ export class PromptManager {
      * @returns {PromptItem[]}
      */
     static deleteAppFeature(featureKey) {
-        if (['qq', 'default'].includes(featureKey)) {
+        if (['qq', 'default', 'x', 'taobao'].includes(featureKey)) {
             throw new Error(`系统核心功能【${featureKey}】不允许删除`);
         }
         const items = this.getPromptItems();

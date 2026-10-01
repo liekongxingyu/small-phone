@@ -606,7 +606,7 @@ export class SettingsApp {
                     status: 'success',
                     detail: `正文深度: ${depth} 条 (${rounds} 轮)`,
                 });
-            } catch (_) {}
+            } catch (_) { }
 
             if (typeof toastr !== 'undefined') {
                 toastr.success(`记忆配置已保存！正文上下文深度：${depth} 条 (${rounds} 轮)`, 'SmallPhone');
@@ -683,7 +683,7 @@ export class SettingsApp {
                     status: 'success',
                     detail: `正文字号: ${finalSize}px`,
                 });
-            } catch (_) {}
+            } catch (_) { }
 
             if (typeof toastr !== 'undefined') {
                 toastr.success(`正文字号已保存并生效！当前：${finalSize}px`, 'SmallPhone');
@@ -813,7 +813,7 @@ export class SettingsApp {
                 status: 'success',
                 detail: `模型: ${newConfig.model || '未指定'} | 预设: ${newConfig.selectedProfile || '直连'} | 最大词符: ${newConfig.maxTokens}`,
             });
-        } catch (_) {}
+        } catch (_) { }
 
         if (typeof toastr !== 'undefined') {
             toastr.success('SmallPhone API 配置已保存至系统！', 'SmallPhone');
@@ -870,7 +870,7 @@ export class SettingsApp {
                     status: 'success',
                     detail: `模式: ${selectedScenario} | 耗时: ${result.timeMs}ms`,
                 });
-            } catch (_) {}
+            } catch (_) { }
         } catch (err) {
             $status.attr('class', 'sp-test-status sp-status-error').html('<i class="fa-solid fa-circle-xmark"></i> 测试失败');
             $meta.text('错误');
@@ -889,7 +889,7 @@ export class SettingsApp {
                     status: 'error',
                     detail: `模式: ${selectedScenario} | 错误: ${errMsg}`,
                 });
-            } catch (_) {}
+            } catch (_) { }
         } finally {
             $btn.prop('disabled', false).html('<i class="fa-solid fa-paper-plane"></i> 重新发送“你好”测试');
         }

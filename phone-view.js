@@ -3,6 +3,7 @@ import { SettingsApp } from './settings-app.js';
 import { QQApp } from './qq-app.js';
 import { LogApp } from './log-app.js';
 import { TaobaoApp } from './taobao-app.js';
+import { XApp } from './x-app.js';
 
 /**
  * 默认主屏幕预设 App 列表（按顺序：QQ，淘宝，X，设置，操作日志）
@@ -53,6 +54,10 @@ export class PhoneView {
         this.appGrid = null;
         this.currentAppId = null; // 当前正在运行的 App
         this.settingsApp = null;
+        this.qqApp = null;
+        this.logApp = null;
+        this.taobaoApp = null;
+        this.xApp = null;
         this.isInteracting = false; // 是否正在拖拽或缩放
 
         // 最小与最大尺寸约束
@@ -176,6 +181,10 @@ export class PhoneView {
             },
         });
 
+        this.xApp = new XApp({
+            onBackToHome: () => this.closeCurrentApp(),
+        });
+
         this._renderDefaultApps();
         this._bindEvents();
         this._setupDraggable();
@@ -217,6 +226,8 @@ export class PhoneView {
                     this.openApp('qq');
                 } else if (app.id === 'taobao') {
                     this.openApp('taobao');
+                } else if (app.id === 'x') {
+                    this.openApp('x');
                 } else if (app.id === 'logs') {
                     this.openApp('logs');
                 } else {
@@ -241,6 +252,9 @@ export class PhoneView {
         } else if (appId === 'taobao' && this.taobaoApp) {
             const pageEl = this.taobaoApp.render();
             this.showAppView(pageEl, 'taobao');
+        } else if (appId === 'x' && this.xApp) {
+            const pageEl = this.xApp.render();
+            this.showAppView(pageEl, 'x');
         } else if (appId === 'logs' && this.logApp) {
             const pageEl = this.logApp.render();
             this.showAppView(pageEl, 'logs');

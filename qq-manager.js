@@ -1444,7 +1444,7 @@ export class QQManager {
             const entries = worldData?.entries || [];
 
             for (const entry of entries) {
-                if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
+                if (!this.isWorldInfoEntryEnabled(entry) || entry.enabled === false || !entry.content || !entry.content.trim()) continue;
 
                 // 4.1 常驻条目（entry.constant）无条件必触发！
                 if (entry.constant) {
@@ -1616,7 +1616,7 @@ export class QQManager {
                 const scanCorpus = scanCorpusParts.filter(Boolean).join('\n').toLowerCase();
 
                 for (const entry of entries) {
-                    if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
+                    if (!this.isWorldInfoEntryEnabled(entry) || entry.enabled === false || !entry.content || !entry.content.trim()) continue;
 
                     // 3.1 常驻条目（entry.constant）无条件必触发！
                     if (entry.constant) {
@@ -1702,7 +1702,55 @@ export class QQManager {
      * 4. 当前会话绑定的世界书（chat_metadata.world_info）
      * 5. 若上述均未指定：自动无缝回退读取酒馆当前全局激活的世界书或已载入的所有世界书！
      * 绝不让用户扑空！
-     * @returns {Promise<{ characterName: string, characterKey: string, boundBooks: string[], entries: Array<{ uid, worldName, name, keys, content, snippet }> }>}
+    /**
+     * 判断单条世界书条目是否处于开启（有效激活）状态
+     * 严谨兼容酒馆底层与各类世界书的禁用标记：
+     * 1. SillyTavern 官方标准：entry.disable === true / 1 / "true" 表示禁用（用户在酒馆界面关闭开关时即修改此项）
+     * 2. 别名与拓展规范：entry.disabled === true 表示禁用
+     * 3. 规范定义：entry.enabled === false 表示禁用
+     * 4. 激活状态：entry.is_active === false / entry.active === false 表示禁用
+     * @param {Object} entry 
+     * @returns {boolean}
+     */
+    static isWorldInfoEntryEnabled(entry) {
+        if (!entry || typeof entry !== 'object') return false;
+
+        // 1. SillyTavern 官方原生判定：entry.disable 为 true 则为禁用
+        if (entry.disable === true || entry.disable === 'true' || entry.disable === 1) {
+            return false;
+        }
+
+        // 2. disabled 别名判定
+        if (entry.disabled === true || entry.disabled === 'true' || entry.disabled === 1) {
+            return false;
+        }
+
+        // 3. enabled 属性判定（显式为 false 则禁用）
+        if (entry.enabled === false || entry.enabled === 'false' || entry.enabled === 0) {
+            return false;
+        }
+
+        // 4. is_active / active 属性判定
+        if (entry.is_active === false || entry.is_active === 'false' || entry.is_active === 0) {
+            return false;
+        }
+        if (entry.active === false || entry.active === 'false' || entry.active === 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 高级穿透：多层级智能扫描当前角色关联的所有世界书与条目
+     * 扫描优先级通道：
+     * 1. 角色主世界书（char.data.extensions.world, char.world, char.data.world）
+     * 2. 角色辅助世界书（world_info.charLore, getCharaAuxWorlds）
+     * 3. 角色内嵌打包世界书（char.data.character_book）
+     * 4. 当前会话绑定的世界书（chat_metadata.world_info）
+     * 5. 若上述均未指定：读取酒馆当前全局激活的世界书（Global World Info）
+     * 严格遵循启用状态：未开启/已禁用的条目绝对过滤排除！
+     * @returns {Promise<{ characterName: string, characterKey: string, boundBooks: string[], entries: Array<{ uid, worldName, name, keys, content, snippet, enabled, constant }> }>}
      */
     static async scanCurrentCharacterWorldEntries() {
         const currentChar = this.getCurrentCharacter();
@@ -1726,11 +1774,6 @@ export class QQManager {
             // 1.3 char.data.world
             if (char.data?.world) {
                 boundBooks.push(char.data.world);
-            }
-            // 1.4 DOM 当前正在展示选中的世界书
-            const domWorld = $('#character_world').val();
-            if (domWorld) {
-                boundBooks.push(domWorld);
             }
 
             // 2. 辅助世界书 (Auxiliary World Books)
@@ -1789,7 +1832,7 @@ export class QQManager {
             }
         } catch (_) {}
 
-        // 5. 若角色卡本身未显式写死世界书：读取酒馆当前全局激活的世界书 (Global World Info)
+        // 5. 若角色卡本身未显式指定世界书：读取酒馆当前全局激活的世界书 (Global World Info)
         if (boundBooks.length === 0) {
             const globalSelection = context?.chatWorldInfo?.globalSelection;
             if (Array.isArray(globalSelection) && globalSelection.length > 0) {
@@ -1801,70 +1844,55 @@ export class QQManager {
             }
         }
 
-        // 6. 极端兜底：如果角色卡、聊天、全局激活全都没配置，但酒馆已载入了世界书：
-        // 自动提取酒馆已存在的世界书作为备选，绝对不让用户处于“无条目可用”的死胡同
-        if (boundBooks.length === 0) {
-            const allKnownBooks = [];
-            try {
-                if (typeof world_names !== 'undefined' && Array.isArray(world_names)) {
-                    allKnownBooks.push(...world_names);
-                } else if (typeof context?.getWorldInfoNames === 'function') {
-                    allKnownBooks.push(...context.getWorldInfoNames());
-                }
-            } catch (_) {}
-
-            $('#world_editor_select option, #world_info option').each((_, el) => {
-                const val = $(el).text().trim();
-                if (val && !val.includes('---')) allKnownBooks.push(val);
-            });
-
-            if (allKnownBooks.length > 0) {
-                boundBooks.push(...allKnownBooks);
-            }
-        }
-
         // 去重并过滤空白
         const uniqueBooks = [...new Set(boundBooks.map(b => String(b || '').trim()).filter(Boolean))];
 
-        // 7. 提取角色卡卡内嵌入的世界书 (data.character_book)
-        const embeddedEntries = [];
-        const charBook = char?.data?.character_book || char?.character_book;
-        if (charBook?.entries && Array.isArray(charBook.entries)) {
-            charBook.entries.forEach((entry, idx) => {
-                if (!entry) return;
-                const keys = Array.isArray(entry.keys)
-                    ? entry.keys
-                    : (typeof entry.keys === 'string' ? entry.keys.split(',').map(s => s.trim()).filter(Boolean) : []);
-                const name = entry.comment
-                    || (keys.length > 0 ? keys[0] : '')
-                    || `卡内设定条目 #${idx + 1}`;
-                const content = entry.content || '';
-                embeddedEntries.push({
-                    uid: entry.id ?? (idx + 10000),
-                    worldName: charBook.name || `${currentChar.name}卡内内置世界书`,
-                    name: name,
-                    keys: keys,
-                    content: content,
-                    snippet: content.replace(/[\r\n\t]+/g, ' ').slice(0, 90),
-                    enabled: entry.enabled !== false,
-                    constant: Boolean(entry.constant),
+        // 6. 提取世界书条目：遵循酒馆官方架构准则
+        // 当角色卡或会话已绑定外部世界书时（uniqueBooks.length > 0），外部世界书是唯一权威源！
+        // 此时卡内嵌入的 character_book 仅为旧卡导入时的陈旧镜像（stale mirror），绝不可与之合并，
+        // 否则用户在外部世界书中删除的条目会被卡内的旧镜像死灰复燃！
+        // 仅在角色卡完全未绑定任何外部世界书时（uniqueBooks.length === 0），才回退读取卡内打包世界书。
+        let mergedEntries = [];
+
+        if (uniqueBooks.length > 0) {
+            // 6.1 并发抓取所有激活的外部世界书条目
+            const externalPromises = uniqueBooks.map(bName => this._fetchWorldInfoEntries(bName));
+            const externalResults = await Promise.all(externalPromises);
+            for (const entries of externalResults) {
+                mergedEntries.push(...entries);
+            }
+        } else {
+            // 6.2 仅在无任何外部世界书时，回退提取角色卡卡内嵌入的世界书 (data.character_book)
+            const charBook = char?.data?.character_book || char?.character_book;
+            if (charBook?.entries && Array.isArray(charBook.entries)) {
+                charBook.entries.forEach((entry, idx) => {
+                    if (!entry || !this.isWorldInfoEntryEnabled(entry)) return;
+                    const keys = Array.isArray(entry.keys)
+                        ? entry.keys
+                        : (typeof entry.keys === 'string' ? entry.keys.split(',').map(s => s.trim()).filter(Boolean) : []);
+                    const name = entry.comment
+                        || (keys.length > 0 ? keys[0] : '')
+                        || `卡内设定条目 #${idx + 1}`;
+                    const content = entry.content || '';
+                    mergedEntries.push({
+                        uid: entry.id ?? (idx + 10000),
+                        worldName: charBook.name || `${currentChar.name}卡内内置世界书`,
+                        name: name,
+                        keys: keys,
+                        content: content,
+                        snippet: content.replace(/[\r\n\t]+/g, ' ').slice(0, 90),
+                        enabled: true,
+                        constant: Boolean(entry.constant),
+                    });
                 });
-            });
+            }
         }
 
-        // 8. 并发抓取所有外部世界书条目
-        const externalPromises = uniqueBooks.map(bName => this._fetchWorldInfoEntries(bName));
-        const externalResults = await Promise.all(externalPromises);
-
-        const mergedEntries = [...embeddedEntries];
-        for (const entries of externalResults) {
-            mergedEntries.push(...entries);
-        }
-
-        // 按名字去重，避免重复条目干扰
+        // 按名字去重，并且严格二次校验必须处于开启状态
         const dedupedEntries = [];
         const seenNames = new Set();
         for (const item of mergedEntries) {
+            if (!this.isWorldInfoEntryEnabled(item)) continue;
             const cleanName = item.name.trim();
             if (!cleanName || seenNames.has(cleanName)) continue;
             seenNames.add(cleanName);
@@ -1880,7 +1908,7 @@ export class QQManager {
     }
 
     /**
-     * 读取指定世界书的全部条目（双通道：优先 context.loadWorldInfo 内存读取，备选 /api/worldinfo/get 接口）
+     * 读取指定世界书的全部有效开启条目（已禁用条目自动过滤，绝不流入）
      */
     static async _fetchWorldInfoEntries(bookName) {
         if (!bookName) return [];
@@ -1891,20 +1919,8 @@ export class QQManager {
 
             let rawEntries = null;
 
-            // 通道 1：优先使用酒馆官方 context.loadWorldInfo(bookName) 毫秒级内存缓存
-            if (context && typeof context.loadWorldInfo === 'function') {
-                try {
-                    const bookData = await context.loadWorldInfo(bookName);
-                    if (bookData && bookData.entries) {
-                        rawEntries = bookData.entries;
-                    }
-                } catch (err) {
-                    console.debug(`[QQManager] loadWorldInfo 内存读取未命中，转入 HTTP 接口:`, err);
-                }
-            }
-
-            // 通道 2：HTTP POST /api/worldinfo/get
-            if (!rawEntries) {
+            // 通道 1：优先直接读取 HTTP /api/worldinfo/get 接口获取服务端最新落盘数据，防止客户端内存缓存滞后残留已删条目
+            try {
                 const headers = (context && typeof context.getRequestHeaders === 'function')
                     ? context.getRequestHeaders()
                     : { 'Content-Type': 'application/json' };
@@ -1913,43 +1929,59 @@ export class QQManager {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ name: bookName }),
+                    cache: 'no-cache',
                 });
 
                 if (resp.ok) {
                     const data = await resp.json();
-                    rawEntries = data?.entries || {};
+                    rawEntries = data?.entries || null;
                 }
+            } catch (httpErr) {
+                console.debug(`[QQManager] /api/worldinfo/get 请求异常，转入内存回退:`, httpErr);
+            }
+
+            // 通道 2：若 HTTP 失败，回退使用酒馆内存缓存 context.loadWorldInfo
+            if (!rawEntries && context && typeof context.loadWorldInfo === 'function') {
+                try {
+                    const bookData = await context.loadWorldInfo(bookName);
+                    if (bookData && bookData.entries) {
+                        rawEntries = bookData.entries;
+                    }
+                } catch (_) {}
             }
 
             if (!rawEntries) return [];
 
             const entriesArray = Array.isArray(rawEntries) ? rawEntries : Object.values(rawEntries);
 
-            return entriesArray.map((entry, idx) => {
-                const keys = Array.isArray(entry.key)
-                    ? entry.key
-                    : (Array.isArray(entry.keys)
-                        ? entry.keys
-                        : (typeof entry.key === 'string' ? entry.key.split(',').map(s => s.trim()).filter(Boolean) : []));
+            // 严格过滤：仅保留真正开启且未被禁用的条目
+            return entriesArray
+                .filter(entry => entry && this.isWorldInfoEntryEnabled(entry))
+                .map((entry, idx) => {
+                    const keys = Array.isArray(entry.key)
+                        ? entry.key
+                        : (Array.isArray(entry.keys)
+                            ? entry.keys
+                            : (typeof entry.key === 'string' ? entry.key.split(',').map(s => s.trim()).filter(Boolean) : []));
 
-                const name = entry.comment
-                    || (keys.length > 0 ? keys[0] : '')
-                    || `条目 #${entry.uid ?? (idx + 1)}`;
+                    const name = entry.comment
+                        || (keys.length > 0 ? keys[0] : '')
+                        || `条目 #${entry.uid ?? (idx + 1)}`;
 
-                const content = entry.content || '';
-                const snippet = content.replace(/[\r\n\t]+/g, ' ').slice(0, 90);
+                    const content = entry.content || '';
+                    const snippet = content.replace(/[\r\n\t]+/g, ' ').slice(0, 90);
 
-                return {
-                    uid: entry.uid ?? (idx + 1),
-                    worldName: bookName,
-                    name: name,
-                    keys: keys,
-                    content: content,
-                    snippet: snippet,
-                    enabled: entry.enabled !== false,
-                    constant: Boolean(entry.constant),
-                };
-            });
+                    return {
+                        uid: entry.uid ?? (idx + 1),
+                        worldName: bookName,
+                        name: name,
+                        keys: keys,
+                        content: content,
+                        snippet: snippet,
+                        enabled: true,
+                        constant: Boolean(entry.constant),
+                    };
+                });
         } catch (e) {
             console.error(`[QQManager] 解析世界书 [${bookName}] 出错:`, e);
             return [];

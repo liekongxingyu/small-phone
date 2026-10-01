@@ -377,7 +377,7 @@ export class TaobaoManager {
 
                         // 2.1 优先激活常驻条目 (constant)
                         for (const entry of allEntries) {
-                            if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
+                            if (entry.enabled === false || (typeof QQManager !== 'undefined' && typeof QQManager.isWorldInfoEntryEnabled === 'function' && !QQManager.isWorldInfoEntryEnabled(entry)) || !entry.content || !entry.content.trim()) continue;
                             if (entry.constant) {
                                 addEntry(entry.content);
                             }
@@ -385,7 +385,7 @@ export class TaobaoManager {
 
                         // 2.2 关键词与条目名命中
                         for (const entry of allEntries) {
-                            if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
+                            if (entry.enabled === false || (typeof QQManager !== 'undefined' && typeof QQManager.isWorldInfoEntryEnabled === 'function' && !QQManager.isWorldInfoEntryEnabled(entry)) || !entry.content || !entry.content.trim()) continue;
                             if (entry.constant) continue;
 
                             const keys = Array.isArray(entry.keys) ? entry.keys : [];

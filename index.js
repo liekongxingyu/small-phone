@@ -83,7 +83,7 @@ jQuery(async () => {
     });
 
     phoneView.onAppClick('x', () => {
-        if (typeof toastr !== 'undefined') toastr.info('X：功能待添加', 'SmallPhone');
+        phoneView.openApp('x');
     });
 
     phoneView.onAppClick('settings', () => {
