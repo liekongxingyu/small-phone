@@ -4362,3 +4362,244 @@ details.narrative-phone-log[open] summary {
     color: #ff5000;
 }
 
+/* ==========================================================================
+   群聊信息与成员管理样式 (Group Info & Member Management)
+   ========================================================================== */
+.sp-btn-xs {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    border-radius: 4px !important;
+    height: 24px !important;
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+.sp-btn-sm {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    border-radius: 5px !important;
+    height: 28px !important;
+}
+
+.sp-qq-group-info-card {
+    max-width: 350px;
+}
+
+.sp-qq-group-summary-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.sp-qq-group-summary-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.sp-qq-group-summary-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-qq-group-name-edit {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 3px 6px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.sp-qq-group-name-edit:focus {
+    border-color: #38bdf8;
+    background: rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.sp-qq-group-summary-sub {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.sp-qq-group-members-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    padding: 0 2px;
+}
+
+.sp-qq-group-members-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sp-qq-group-members-title i {
+    color: #38bdf8;
+}
+
+.sp-qq-group-add-panel {
+    background: rgba(56, 189, 248, 0.07);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: spFadeIn 0.2s ease-out;
+}
+
+.sp-qq-group-add-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.sp-qq-btn-text {
+    background: transparent;
+    border: none;
+    color: #38bdf8;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+.sp-qq-btn-text:hover {
+    text-decoration: underline;
+}
+
+.sp-qq-group-add-candidates {
+    max-height: 140px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 2px;
+}
+
+.sp-qq-group-add-candidate-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.sp-qq-group-add-candidate-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.sp-qq-group-add-candidate-item.is-selected {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+.sp-qq-group-add-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sp-qq-info-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.sp-qq-member-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+
+.sp-qq-member-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.sp-qq-member-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.sp-qq-member-name {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-qq-member-sub {
+    font-size: 9.5px;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sp-qq-remove-member-btn {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: rgba(239, 68, 68, 0.8);
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.sp-qq-remove-member-btn:hover {
+    color: #ffffff;
+    background: #ef4444;
+    border-color: #ef4444;
+}
+
+.sp-qq-remove-member-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.3);
+}
+

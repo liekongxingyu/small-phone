@@ -279,6 +279,7 @@ export class QQApp {
         this.activeChatId = null; // 当前会话 ID (可以是 friendId 或 groupId)
         this.activeChatType = 'friend'; // 'friend' | 'group'
         this.groupSelectedFriendIds = new Set(); // 建群弹窗中勾选的好友 ID 集合
+        this.groupAddCandidateIds = new Set(); // 添加群成员时勾选的好友 ID 集合
         this.cachedWorldEntries = []; // 缓存读取到的世界书条目
         this.selectedUids = new Set(); // 导入弹窗中选中的条目 UID 集合
         this.searchKeyword = ''; // 世界书搜索过滤关键词
@@ -588,6 +589,73 @@ export class QQApp {
                         </div>
                     </div>
                 </div>
+
+                <!-- 群聊信息与成员管理弹窗 (查看群聊人员、添加成员、移出成员) -->
+                <div class="sp-qq-modal-overlay" id="sp-qq-group-info-modal" style="display: none;">
+                    <div class="sp-qq-modal-card sp-qq-group-info-card">
+                        <div class="sp-qq-modal-header">
+                            <div class="sp-qq-modal-title">
+                                <i class="fa-solid fa-users-gear" style="color: #38bdf8;"></i> 群聊信息与成员
+                            </div>
+                            <button type="button" class="sp-qq-modal-close" id="sp-qq-group-info-close-btn">&times;</button>
+                        </div>
+                        <div class="sp-qq-modal-body" style="max-height: 420px; overflow-y: auto;">
+                            <!-- 群基础信息卡片 -->
+                            <div class="sp-qq-group-summary-card">
+                                <div class="sp-qq-avatar" id="sp-qq-info-group-avatar" style="width: 36px; height: 36px; min-width: 36px; font-size: 13px; font-weight: 700;">群</div>
+                                <div class="sp-qq-group-summary-meta">
+                                    <div class="sp-qq-group-summary-title-row">
+                                        <input type="text" id="sp-qq-info-group-name-input" class="sp-qq-group-name-edit" placeholder="群名称" title="可直接编辑群名称" />
+                                        <button type="button" class="sp-btn sp-btn-primary sp-btn-xs" id="sp-qq-info-save-name-btn" title="保存群名称">
+                                            <i class="fa-solid fa-check"></i> 保存
+                                        </button>
+                                    </div>
+                                    <div class="sp-qq-group-summary-sub" id="sp-qq-info-group-sub">
+                                        群号: --- · 0 位成员
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 操作条：添加成员按钮与成员统计 -->
+                            <div class="sp-qq-group-members-action-bar">
+                                <span class="sp-qq-group-members-title">
+                                    <i class="fa-solid fa-user-group"></i> 群成员 (<span id="sp-qq-info-members-count">0</span>)
+                                </span>
+                                <button type="button" class="sp-btn sp-btn-primary sp-btn-xs" id="sp-qq-info-open-add-btn">
+                                    <i class="fa-solid fa-user-plus"></i> 添加成员
+                                </button>
+                            </div>
+
+                            <!-- 添加成员候选面板 (点击“添加成员”时展开) -->
+                            <div class="sp-qq-group-add-panel" id="sp-qq-group-add-panel" style="display: none;">
+                                <div class="sp-qq-group-add-header">
+                                    <span>选择要拉入群聊的联系人：</span>
+                                    <button type="button" class="sp-qq-btn-text" id="sp-qq-group-add-cancel-btn">收起</button>
+                                </div>
+                                <div class="sp-qq-group-add-candidates" id="sp-qq-group-add-candidates">
+                                    <!-- 动态渲染非群成员好友 -->
+                                </div>
+                                <div class="sp-qq-group-add-footer">
+                                    <span id="sp-qq-group-add-selected-count" style="font-size: 11px; color: #38bdf8; font-weight: 500;">已选 0 人</span>
+                                    <button type="button" class="sp-btn sp-btn-primary sp-btn-xs" id="sp-qq-group-add-confirm-btn" disabled>
+                                        确认添加 (0)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 现存群成员列表 (查看成员与移出成员) -->
+                            <div class="sp-qq-info-members-list" id="sp-qq-info-members-list">
+                                <!-- 动态渲染已有群成员 -->
+                            </div>
+                        </div>
+                        <div class="sp-qq-modal-footer" style="justify-content: space-between;">
+                            <button type="button" class="sp-btn sp-btn-danger sp-btn-xs" id="sp-qq-info-dissolve-btn" title="解散并删除本群">
+                                <i class="fa-solid fa-trash-can"></i> 解散本群
+                            </button>
+                            <button type="button" class="sp-btn sp-btn-secondary sp-btn-xs" id="sp-qq-group-info-done-btn">完成</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -767,6 +835,9 @@ export class QQApp {
                             <span class="sp-qq-contact-sub" style="font-size: 10px; color: rgba(255,255,255,0.45);">${memberCount} 位成员 · 群号: ${g.groupNumber || '---'}</span>
                         </div>
                         <div class="sp-qq-contact-actions">
+                            <button type="button" class="sp-btn-icon sp-qq-manage-group-btn" data-id="${g.id}" title="查看群成员与管理">
+                                <i class="fa-solid fa-users-gear"></i>
+                            </button>
                             <button type="button" class="sp-btn-icon sp-btn-danger sp-qq-del-group-btn" data-id="${g.id}" title="解散群聊">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
@@ -1026,13 +1097,16 @@ export class QQApp {
                     <button type="button" class="sp-qq-chat-back-btn" id="sp-qq-chat-back-btn">
                         <i class="fa-solid fa-chevron-left"></i> 消息
                     </button>
-                    <div class="sp-qq-chat-header-center">
-                        <div class="sp-qq-chat-target-name">${group.name} (${memberCount}人)</div>
+                    <div class="sp-qq-chat-header-center" id="sp-qq-chat-header-group-title" style="cursor: pointer;" title="点击查看群成员与管理">
+                        <div class="sp-qq-chat-target-name">${group.name} (${memberCount}人) <i class="fa-solid fa-angle-right" style="font-size: 10px; opacity: 0.6; margin-left: 2px;"></i></div>
                         <div class="sp-qq-chat-target-status">
                             <span class="sp-qq-online-badge">群聊在线</span> · 群号: ${group.groupNumber || '---'}
                         </div>
                     </div>
-                    <div class="sp-qq-chat-header-right">
+                    <div class="sp-qq-chat-header-right" style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="sp-qq-icon-btn" id="sp-qq-group-info-btn" title="查看群聊人员与管理">
+                            <i class="fa-solid fa-users"></i>
+                        </button>
                         <button type="button" class="sp-qq-icon-btn" id="sp-qq-chat-clear-btn" title="清空本群对话历史">
                             <i class="fa-solid fa-eraser"></i>
                         </button>
@@ -1624,6 +1698,141 @@ export class QQApp {
     }
 
     /**
+     * 打开群聊信息与成员管理弹窗
+     */
+    openGroupInfoModal(groupId) {
+        if (!groupId) return;
+        const group = QQManager.getGroup(groupId);
+        if (!group) return;
+
+        this.groupAddCandidateIds = new Set();
+        this._renderGroupInfoModal(groupId);
+        this.container.find('#sp-qq-group-info-modal').show();
+    }
+
+    /**
+     * 渲染群聊信息与已有群成员列表
+     */
+    _renderGroupInfoModal(groupId) {
+        const group = QQManager.getGroup(groupId);
+        if (!group) {
+            this.container.find('#sp-qq-group-info-modal').hide();
+            return;
+        }
+
+        const friends = QQManager.getFriends();
+        const memberIds = group.memberIds || [];
+        const memberCount = memberIds.length;
+        const initialText = (group.name || '群').slice(0, 2);
+
+        // A. 群基础卡片
+        const $avatar = this.container.find('#sp-qq-info-group-avatar');
+        $avatar.text(initialText).css('background-color', group.avatarColor || '#10b981');
+        this.container.find('#sp-qq-info-group-name-input').val(group.name || '');
+        this.container.find('#sp-qq-info-group-sub').text(`群号: ${group.groupNumber || '---'} · ${memberCount} 位成员`);
+        this.container.find('#sp-qq-info-members-count').text(memberCount);
+
+        // B. 隐藏添加成员子面板并重置
+        this.container.find('#sp-qq-group-add-panel').hide();
+
+        // C. 渲染群成员列表
+        const $membersList = this.container.find('#sp-qq-info-members-list');
+        $membersList.empty();
+
+        const memberFriends = memberIds.map(id => {
+            const f = friends.find(item => item.id === id);
+            return f || { id, name: '未知成员', qqNumber: '---', avatarColor: '#64748b' };
+        });
+
+        if (memberFriends.length === 0) {
+            $membersList.html('<div style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.4); padding: 12px;">暂无群成员</div>');
+            return;
+        }
+
+        const membersHtml = memberFriends.map(m => {
+            const safeName = $('<div>').text(m.name || '群友').html();
+            const initialChar = (m.name || '友').slice(0, 1).toUpperCase();
+            const subInfo = m.remark ? `${m.remark} · QQ: ${m.qqNumber || '---'}` : `QQ: ${m.qqNumber || '---'}`;
+            const canRemove = memberCount > 1;
+
+            return `
+                <div class="sp-qq-member-item" data-id="${m.id}" data-name="${safeName}">
+                    <div class="sp-qq-avatar" style="width: 26px; height: 26px; min-width: 26px; font-size: 11px; background-color: ${m.avatarColor || '#3b82f6'};">
+                        ${initialChar}
+                    </div>
+                    <div class="sp-qq-member-meta">
+                        <span class="sp-qq-member-name">${safeName}</span>
+                        <span class="sp-qq-member-sub">${$('<div>').text(subInfo).html()}</span>
+                    </div>
+                    <button type="button" class="sp-qq-remove-member-btn" data-id="${m.id}" data-name="${safeName}" title="${canRemove ? '从群聊中移出该成员' : '群内唯一成员不可移出'}" ${!canRemove ? 'disabled' : ''}>
+                        <i class="fa-solid fa-user-minus"></i> 移出
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        $membersList.html(membersHtml);
+    }
+
+    /**
+     * 渲染“添加成员”候选好友列表（过滤掉已经在群里的好友）
+     */
+    _renderGroupAddCandidates(groupId) {
+        const group = QQManager.getGroup(groupId);
+        if (!group) return;
+
+        const friends = QQManager.getFriends();
+        const existingMemberIds = new Set(group.memberIds || []);
+        const nonMembers = friends.filter(f => !existingMemberIds.has(f.id));
+        const $candidates = this.container.find('#sp-qq-group-add-candidates');
+        $candidates.empty();
+
+        if (nonMembers.length === 0) {
+            $candidates.html(`
+                <div style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.45); padding: 12px 6px;">
+                    ${friends.length === 0 ? '通讯录中暂无好友，请先在通讯录添加好友' : '通讯录所有好友均已加入此群聊'}
+                </div>
+            `);
+            this.container.find('#sp-qq-group-add-confirm-btn').prop('disabled', true);
+            this.container.find('#sp-qq-group-add-selected-count').text('已选 0 人');
+            return;
+        }
+
+        const candidatesHtml = nonMembers.map(f => {
+            const safeName = $('<div>').text(f.name || '好友').html();
+            const initialChar = (f.name || '友').slice(0, 1).toUpperCase();
+            const isChecked = this.groupAddCandidateIds.has(f.id);
+            const subInfo = f.remark ? `${f.remark} · QQ: ${f.qqNumber || '---'}` : `QQ: ${f.qqNumber || '---'}`;
+
+            return `
+                <div class="sp-qq-group-add-candidate-item ${isChecked ? 'is-selected' : ''}" data-id="${f.id}">
+                    <input type="checkbox" class="sp-qq-add-member-check" data-id="${f.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; pointer-events: none; accent-color: #0284c7; width: 14px; height: 14px;" />
+                    <div class="sp-qq-avatar" style="width: 22px; height: 22px; min-width: 22px; font-size: 10px; background-color: ${f.avatarColor || '#3b82f6'};">
+                        ${initialChar}
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                        <span style="font-size: 11.5px; font-weight: 500; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${safeName}</span>
+                        <span style="font-size: 9.5px; color: rgba(255, 255, 255, 0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${$('<div>').text(subInfo).html()}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        $candidates.html(candidatesHtml);
+        this._updateGroupAddCandidateState();
+    }
+
+    /**
+     * 更新添加候选成员按钮状态
+     */
+    _updateGroupAddCandidateState() {
+        const count = this.groupAddCandidateIds ? this.groupAddCandidateIds.size : 0;
+        this.container.find('#sp-qq-group-add-selected-count').text(`已选 ${count} 人`);
+        const $confirmBtn = this.container.find('#sp-qq-group-add-confirm-btn');
+        $confirmBtn.prop('disabled', count === 0).text(`确认添加 (${count})`);
+    }
+
+    /**
      * 获取经过当前搜索词过滤后的条目列表
      */
     _getFilteredWorldEntries() {
@@ -1735,6 +1944,147 @@ export class QQApp {
         // 3.4 关闭创建群聊弹窗
         this.container.on('click', '#sp-qq-create-group-close-btn, #sp-qq-create-group-cancel-btn', () => {
             this.container.find('#sp-qq-create-group-modal').hide();
+        });
+
+        // 3.5 打开群聊信息与成员管理弹窗 (支持从群聊顶栏与通讯录群卡片打开)
+        this.container.on('click', '#sp-qq-group-info-btn, #sp-qq-chat-header-group-title', () => {
+            if (this.activeChatType === 'group' && this.activeChatId) {
+                this.openGroupInfoModal(this.activeChatId);
+            }
+        });
+
+        this.container.on('click', '.sp-qq-manage-group-btn', (e) => {
+            e.stopPropagation();
+            const groupId = $(e.currentTarget).data('id');
+            if (groupId) {
+                this.activeChatId = groupId;
+                this.activeChatType = 'group';
+                this.openGroupInfoModal(groupId);
+            }
+        });
+
+        // 3.6 关闭群聊信息弹窗
+        this.container.on('click', '#sp-qq-group-info-close-btn, #sp-qq-group-info-done-btn', () => {
+            this.container.find('#sp-qq-group-info-modal').hide();
+        });
+
+        // 3.7 展开/收起添加成员候选面板
+        this.container.on('click', '#sp-qq-info-open-add-btn', () => {
+            const $panel = this.container.find('#sp-qq-group-add-panel');
+            if ($panel.is(':visible')) {
+                $panel.hide();
+            } else {
+                this.groupAddCandidateIds = new Set();
+                this._renderGroupAddCandidates(this.activeChatId);
+                $panel.show();
+            }
+        });
+
+        this.container.on('click', '#sp-qq-group-add-cancel-btn', () => {
+            this.container.find('#sp-qq-group-add-panel').hide();
+            this.groupAddCandidateIds = new Set();
+        });
+
+        // 3.8 候选成员勾选/反选切换
+        this.container.on('click', '.sp-qq-group-add-candidate-item', (e) => {
+            e.stopPropagation();
+            const $item = $(e.currentTarget);
+            const friendId = $item.data('id');
+            if (!friendId) return;
+
+            if (this.groupAddCandidateIds.has(friendId)) {
+                this.groupAddCandidateIds.delete(friendId);
+                $item.removeClass('is-selected').find('.sp-qq-add-member-check').prop('checked', false);
+            } else {
+                this.groupAddCandidateIds.add(friendId);
+                $item.addClass('is-selected').find('.sp-qq-add-member-check').prop('checked', true);
+            }
+            this._updateGroupAddCandidateState();
+        });
+
+        // 3.9 确认将选中联系人加入群聊
+        this.container.on('click', '#sp-qq-group-add-confirm-btn', () => {
+            if (!this.groupAddCandidateIds || this.groupAddCandidateIds.size === 0) return;
+            const groupId = this.activeChatId;
+            const idsToAdd = Array.from(this.groupAddCandidateIds);
+            const count = idsToAdd.length;
+
+            QQManager.addGroupMembers(groupId, idsToAdd);
+            this.groupAddCandidateIds.clear();
+            this.container.find('#sp-qq-group-add-panel').hide();
+
+            this._renderGroupInfoModal(groupId);
+            this._renderChatView();
+            this._renderContactsList();
+            if (typeof toastr !== 'undefined') toastr.success(`已成功添加 ${count} 位群成员！`, 'QQ群聊');
+        });
+
+        // 3.10 将成员移出群聊
+        this.container.on('click', '.sp-qq-remove-member-btn', (e) => {
+            e.stopPropagation();
+            const $btn = $(e.currentTarget);
+            if ($btn.prop('disabled')) return;
+            const memberId = $btn.data('id');
+            const memberName = $btn.data('name') || '该成员';
+            const groupId = this.activeChatId;
+
+            const group = QQManager.getGroup(groupId);
+            if (!group) return;
+            if ((group.memberIds || []).length <= 1) {
+                if (typeof toastr !== 'undefined') toastr.warning('群聊至少需保留 1 位成员，若无需此群请直接解散群聊', 'QQ群聊');
+                else alert('群聊至少需保留 1 位成员，若无需此群请直接解散群聊');
+                return;
+            }
+
+            if (!confirm(`确认将【${memberName}】从群聊中移出吗？`)) return;
+
+            try {
+                QQManager.removeGroupMember(groupId, memberId);
+                this._renderGroupInfoModal(groupId);
+                this._renderChatView();
+                this._renderContactsList();
+                if (typeof toastr !== 'undefined') toastr.info(`已将【${memberName}】从群聊中移出`, 'QQ群聊');
+            } catch (err) {
+                if (typeof toastr !== 'undefined') toastr.error(err.message || String(err), 'QQ群聊');
+            }
+        });
+
+        // 3.11 保存修改群名称
+        const handleSaveGroupName = () => {
+            const groupId = this.activeChatId;
+            const newName = this.container.find('#sp-qq-info-group-name-input').val().trim();
+            if (!newName || !groupId) return;
+            const group = QQManager.getGroup(groupId);
+            if (!group) return;
+            if (group.name !== newName) {
+                QQManager.updateGroup(groupId, { name: newName });
+                this._renderChatView();
+                this._renderGroupInfoModal(groupId);
+                this._renderContactsList();
+                if (typeof toastr !== 'undefined') toastr.success(`群名称已修改为【${newName}】`, 'QQ群聊');
+            }
+        };
+
+        this.container.on('click', '#sp-qq-info-save-name-btn', handleSaveGroupName);
+        this.container.on('keydown', '#sp-qq-info-group-name-input', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSaveGroupName();
+            }
+        });
+
+        // 3.12 在群聊管理弹窗内解散群聊
+        this.container.on('click', '#sp-qq-info-dissolve-btn', async () => {
+            const groupId = this.activeChatId;
+            const group = QQManager.getGroup(groupId);
+            if (!group) return;
+
+            if (confirm(`确认解散群聊【${group.name}】吗？\n（聊天记录及正文中的手机群聊互动也将同步清除）`)) {
+                this.container.find('#sp-qq-group-info-modal').hide();
+                await QQManager.deleteGroup(groupId);
+                this.closeChat();
+                if (typeof toastr !== 'undefined') toastr.info(`群聊【${group.name}】已解散`, 'QQ群聊');
+            }
         });
 
         // 4. 点击打开一键导入世界书弹窗

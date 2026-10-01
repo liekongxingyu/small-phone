@@ -162,10 +162,6 @@ export class PhoneView {
                         }
                     }, 80);
                 }
-                const $tavernInput = $('#send_textarea');
-                if ($tavernInput.length > 0) {
-                    $tavernInput.val(sendText).trigger('input').trigger('change');
-                }
                 try {
                     OperationLogService.log({
                         module: '淘宝好物',

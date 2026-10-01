@@ -718,34 +718,37 @@ export class PromptManager {
             normalizedVars.lorebook = normalizedVars.persona || normalizedVars.personel || normalizedVars.personality || normalizedVars.world_info;
         }
 
-        // 1. 解析条件分支块
-        const blockRegex = /(?:\{%\s*if\s+([^%]+?)\s*%\}|{{#if\s+([^}]+?)}}|\[if\s+([^\]]+?)\])([\s\S]*?)(?:\{%\s*endif\s*%\}|{{\/if}}|\[\/if\])/gi;
+        // 1. 深度递归解析条件分支块（Innermost-first 循环替换，完美支持任意深度 if 嵌套）
+        let maxDepth = 25;
+        const innermostRegex = /(?:\{%\s*if\s+([^%]+?)\s*%\}|{{#if\s+([^}]+?)}}|\[if\s+([^\]]+?)\])((?:(?!\{%\s*if|{{#if|\[if)[\s\S])*?)(?:\{%\s*endif\s*%\}|{{\/if}}|\[\/if\])/i;
 
-        text = text.replace(blockRegex, (match, expr1, expr2, expr3, body) => {
-            const initialExpr = expr1 || expr2 || expr3;
-            const subParts = [];
-            const splitRegex = /(?:\{%\s*(?:elif\s+([^%]+?)|else)\s*%\}|{{#(?:elif\s+([^}]+?)|else)}}|\[(?:elif\s+([^\]]+?)|else)\])/gi;
+        while (maxDepth-- > 0 && innermostRegex.test(text)) {
+            text = text.replace(innermostRegex, (match, expr1, expr2, expr3, body) => {
+                const initialExpr = expr1 || expr2 || expr3;
+                const subParts = [];
+                const splitRegex = /(?:\{%\s*(?:elif\s+([^%]+?)|else)\s*%\}|{{#(?:elif\s+([^}]+?)|else)}}|\[(?:elif\s+([^\]]+?)|else)\])/gi;
 
-            let lastIndex = 0;
-            let currentCond = initialExpr;
-            let m;
+                let lastIndex = 0;
+                let currentCond = initialExpr;
+                let m;
 
-            while ((m = splitRegex.exec(body)) !== null) {
-                const blockContent = body.slice(lastIndex, m.index);
-                subParts.push({ cond: currentCond, content: blockContent });
-                lastIndex = m.index + m[0].length;
-                const elifExpr = m[1] || m[2] || m[3];
-                currentCond = elifExpr ? elifExpr : '__ELSE__';
-            }
-            subParts.push({ cond: currentCond, content: body.slice(lastIndex) });
-
-            for (const part of subParts) {
-                if (part.cond === '__ELSE__' || this.evaluateCondition(part.cond, normalizedVars)) {
-                    return part.content.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
+                while ((m = splitRegex.exec(body)) !== null) {
+                    const blockContent = body.slice(lastIndex, m.index);
+                    subParts.push({ cond: currentCond, content: blockContent });
+                    lastIndex = m.index + m[0].length;
+                    const elifExpr = m[1] || m[2] || m[3];
+                    currentCond = elifExpr ? elifExpr : '__ELSE__';
                 }
-            }
-            return '';
-        });
+                subParts.push({ cond: currentCond, content: body.slice(lastIndex) });
+
+                for (const part of subParts) {
+                    if (part.cond === '__ELSE__' || this.evaluateCondition(part.cond, normalizedVars)) {
+                        return part.content.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
+                    }
+                }
+                return '';
+            });
+        }
 
         // 2. 变量占位符全局替换 {{var_name}}
         for (const [k, v] of Object.entries(normalizedVars)) {

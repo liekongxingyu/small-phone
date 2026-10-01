@@ -55,45 +55,48 @@ export class PhoneLogService {
     }
 
     /**
-     * 提取并标准化一次互动的全部消息行
+     * 提取并标准化一次互动的全部消息行（纯净无时间戳，严格去掉日期和时间）
+     * 格式：
+     * 用户名：消息内容
+     * 角色名：回复内容
      * @param {Object} params
      * @param {string} params.userName
      * @param {string} params.charName
      * @param {string} params.userText
      * @param {string} params.replyText
-     * @param {number} [params.timestamp=Date.now()]
-     * @returns {string[]} 如 ["[09-28 19:25] 我：你好", "[09-28 19:26] 角色：你好呀"]
+     * @returns {string[]} 如 ["我：你好", "角色：你好呀"]
      */
     static formatInteractionLines({
         userName = '我',
         charName = '角色',
         userText = '',
         replyText = '',
-        timestamp = Date.now(),
     }) {
-        const timeStr = this.formatPhoneLogTime(timestamp);
         const lines = [];
 
-        // 1. 用户输入行
+        // 1. 用户输入行（剥离任何前缀时间戳）
         let uLine = String(userText || '').trim();
         if (uLine) {
-            if (/^\[\d{2}-\d{2}\s+\d{2}:\d{2}\]/.test(uLine)) {
+            uLine = uLine.replace(/^\[[^\]]+\]\s*/, '').trim();
+            if (/^[^:：\r\n]{1,25}[:：]/.test(uLine)) {
                 lines.push(uLine);
             } else {
-                lines.push(`[${timeStr}] ${userName}：${uLine}`);
+                lines.push(`${userName}：${uLine}`);
             }
         }
 
-        // 2. AI 回复行（支持多行回复）
+        // 2. AI 回复行（支持多行回复，剥离任何时间戳）
         const rawAiLines = String(replyText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         if (rawAiLines.length === 0) {
-            lines.push(`[${timeStr}] ${charName}：(无回复)`);
+            lines.push(`${charName}：(无回复)`);
         } else {
             for (const rLine of rawAiLines) {
-                if (/^\[\d{2}-\d{2}\s+\d{2}:\d{2}\]/.test(rLine)) {
-                    lines.push(rLine);
+                let cleanLine = rLine.replace(/^\[[^\]]+\]\s*/, '').trim();
+                if (!cleanLine) continue;
+                if (/^[^:：\r\n]{1,25}[:：]/.test(cleanLine)) {
+                    lines.push(cleanLine);
                 } else {
-                    lines.push(`[${timeStr}] ${charName}：${rLine}`);
+                    lines.push(`${charName}：${cleanLine}`);
                 }
             }
         }
@@ -196,11 +199,13 @@ export class PhoneLogService {
                 const fullTagStart = match[1];
                 const insideBody = match[3];
 
-                // 提取已存在的消息记录行（以 [MM-DD HH:mm] 开头）
+                // 提取已存在的消息记录行（兼容带时间戳的旧格式并清洗掉日期时间）
                 const existingLines = insideBody
                     .split(/\r?\n/)
                     .map(l => l.trim())
-                    .filter(l => /^\[\d{2}-\d{2}\s+\d{2}:\d{2}\]/.test(l));
+                    .filter(l => l && !l.startsWith('<summary') && !l.startsWith('</summary') && !l.startsWith('【') && !l.startsWith('📱'))
+                    .map(l => l.replace(/^\[[^\]]+\]\s*/, '').trim())
+                    .filter(Boolean);
 
                 const allCombinedLines = [...existingLines, ...newLines];
                 updatedTotalCount = allCombinedLines.length;
@@ -413,8 +418,8 @@ export class PhoneLogService {
 
                     for (const line of lines) {
                         const trimmed = line.trim();
-                        // 匹配标准手机消息行：[MM-DD HH:mm] 发送人：内容
-                        const matchMsg = trimmed.match(/^\[\d{2}-\d{2}\s+\d{2}:\d{2}\]\s*([^:：]+)[:：]\s*([\s\S]+)$/);
+                        // 匹配手机消息行（兼容无时间戳或有时间戳格式）：发送人：内容 或 [时间] 发送人：内容
+                        const matchMsg = trimmed.match(/^(?:\[[^\]]+\]\s*)?([^:：]+)[:：]\s*([\s\S]+)$/);
                         if (matchMsg) {
                             const sName = matchMsg[1].trim();
                             const content = matchMsg[2].trim();
@@ -442,7 +447,7 @@ export class PhoneLogService {
                     // 统计该 details 块内剩余有效消息行数量
                     const remainingMsgLines = retainedLines
                         .map(l => l.trim())
-                        .filter(l => /^\[\d{2}-\d{2}\s+\d{2}:\d{2}\]/.test(l));
+                        .filter(l => l && !l.startsWith('<summary') && !l.startsWith('</summary') && !l.startsWith('【') && !l.startsWith('📱') && /^[^:：\r\n]{1,25}[:：]/.test(l));
 
                     if (remainingMsgLines.length === 0) {
                         // 消息全部被清空，整个 details 块直接移除

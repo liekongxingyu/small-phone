@@ -406,7 +406,7 @@ export class QQManager {
                         const body = match[1];
                         const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                         for (const line of lines) {
-                            const m = line.match(/^\[[^\]]+\]\s*([^:：]+)[:：]\s*([\s\S]+)$/);
+                            const m = line.match(/^(?:\[[^\]]+\]\s*)?([^:：]+)[:：]\s*([\s\S]+)$/);
                             if (m) {
                                 const sName = m[1].trim();
                                 const content = m[2].trim();
@@ -877,6 +877,117 @@ export class QQManager {
     }
 
     /**
+     * 向指定群聊添加联系人成员
+     * @param {string} groupId 群聊 ID
+     * @param {string|string[]} memberIds 好友 ID 或 ID 数组
+     * @returns {Object} 更新后的群聊对象
+     */
+    static addGroupMembers(groupId, memberIds) {
+        const group = this.getGroup(groupId);
+        if (!group) throw new Error('群聊不存在或已被解散');
+
+        const idsToAdd = Array.isArray(memberIds) ? memberIds : [memberIds];
+        const friends = this.getFriends();
+        const validIds = idsToAdd.filter(id => friends.some(f => f.id === id));
+        if (validIds.length === 0) return group;
+
+        if (!Array.isArray(group.memberIds)) group.memberIds = [];
+        const prevCount = group.memberIds.length;
+        group.memberIds = [...new Set([...group.memberIds, ...validIds])];
+        const addedCount = group.memberIds.length - prevCount;
+
+        const data = this.getData();
+        if (Array.isArray(data.groups)) {
+            const idx = data.groups.findIndex(g => g.id === groupId);
+            if (idx >= 0) {
+                data.groups[idx] = group;
+                this.saveData(data);
+            }
+        }
+
+        try {
+            OperationLogService.log({
+                module: 'QQ群聊',
+                action: '添加群成员',
+                status: 'success',
+                detail: `群名: ${group.name} | 新增: ${addedCount}人 | 现有人数: ${group.memberIds.length}人`,
+            });
+        } catch (_) {}
+
+        return group;
+    }
+
+    /**
+     * 从指定群聊移出联系人成员
+     * @param {string} groupId 群聊 ID
+     * @param {string} memberId 要移出的好友 ID
+     * @returns {Object} 更新后的群聊对象
+     */
+    static removeGroupMember(groupId, memberId) {
+        const group = this.getGroup(groupId);
+        if (!group) throw new Error('群聊不存在或已被解散');
+
+        if (!Array.isArray(group.memberIds)) group.memberIds = [];
+        if (group.memberIds.length <= 1) {
+            throw new Error('群聊至少需保留 1 位成员，若无需此群请直接解散群聊');
+        }
+
+        const removedFriend = this.getFriend(memberId);
+        const removedName = removedFriend ? removedFriend.name : memberId;
+
+        group.memberIds = group.memberIds.filter(id => id !== memberId);
+
+        const data = this.getData();
+        if (Array.isArray(data.groups)) {
+            const idx = data.groups.findIndex(g => g.id === groupId);
+            if (idx >= 0) {
+                data.groups[idx] = group;
+                this.saveData(data);
+            }
+        }
+
+        try {
+            OperationLogService.log({
+                module: 'QQ群聊',
+                action: '移出群成员',
+                status: 'info',
+                detail: `群名: ${group.name} | 移出成员: ${removedName} | 现有人数: ${group.memberIds.length}人`,
+            });
+        } catch (_) {}
+
+        return group;
+    }
+
+    /**
+     * 更新群聊基本信息（如群名）
+     * @param {string} groupId 群聊 ID
+     * @param {Object} updateData 更新字段 { name, memberIds }
+     * @returns {Object} 更新后的群聊对象
+     */
+    static updateGroup(groupId, updateData = {}) {
+        const group = this.getGroup(groupId);
+        if (!group) throw new Error('群聊不存在或已被解散');
+
+        if (typeof updateData.name === 'string' && updateData.name.trim()) {
+            group.name = updateData.name.trim();
+        }
+        if (Array.isArray(updateData.memberIds)) {
+            group.memberIds = updateData.memberIds;
+        }
+
+        const data = this.getData();
+        if (Array.isArray(data.groups)) {
+            const idx = data.groups.findIndex(g => g.id === groupId);
+            if (idx >= 0) {
+                data.groups[idx] = group;
+                this.saveData(data);
+            }
+        }
+
+        return group;
+    }
+
+    /**
      * 核心：向群聊发送消息并调用 AI 多角色响应
      */
     static async sendGroupMessage(groupId, userText, { skipAppendUser = false } = {}) {
@@ -902,20 +1013,16 @@ export class QQManager {
             .map(id => friends.find(f => f.id === id))
             .filter(Boolean);
 
-        // 2. 组装群成员人设列表 (group_members)
-        const groupMembersPrompt = memberFriends.map(f => {
-            const roleDesc = f.personaPrompt ? `；设定：${f.personaPrompt}` : '';
-            return `- 【${f.name}】(QQ: ${f.qqNumber})${roleDesc}`;
-        }).join('\n');
+        // 2. 组装群成员名单列表 (group_members：仅保留纯净成员姓名)
+        const groupMembersPrompt = memberFriends.map(f => `- 【${f.name}】`).join('\n');
 
-        // 3. 动态触发群内所有成员的世界书
-        const wiPromises = memberFriends.map(f => this.resolveDynamicWorldInfoPrompt({
-            friend: f,
+        // 3. 动态触发群聊专属世界书（统一群聊上下文 + 本群成员基础人设 + 拦截无关角色 + 条目级全局去重）
+        const dynamicWorldInfo = await this.resolveGroupDynamicWorldInfoPrompt({
+            group,
+            memberFriends,
             userText,
             userName,
-        }));
-        const wiResults = await Promise.all(wiPromises);
-        const dynamicWorldInfo = [...new Set(wiResults.filter(Boolean))].join('\n\n');
+        });
 
         const promptConfig = SettingsManager.getPromptConfig();
         const useTavernPreset = promptConfig.useTavernPreset !== false;
@@ -1202,7 +1309,220 @@ export class QQManager {
     }
 
     /**
+     * 辅助：从世界书条目的内容或名称中智能提取所属的角色姓名
+     * 识别格式：
+     * 1. JSON 格式: "姓名": "xxx" 或 "name": "xxx"
+     * 2. 文本格式: 姓名：xxx 或 【姓名】: xxx
+     * 3. 匹配已知所有 QQ 好友的名字
+     * 若提取失败或属于通用世界观/法则条目，则返回 null
+     * @param {string} content 条目文本
+     * @param {string} [entryName=''] 条目名称
+     * @returns {string|null}
+     */
+    static _extractCharacterNameFromEntry(content, entryName = '') {
+        const str = String(content || '');
+        const nameStr = String(entryName || '');
+
+        // 1. JSON 格式
+        const jsonMatch = str.match(/"姓名"\s*:\s*"([^"\r\n]+)"/) || str.match(/"name"\s*:\s*"([^"\r\n]+)"/);
+        if (jsonMatch && jsonMatch[1]) {
+            return jsonMatch[1].trim();
+        }
+
+        // 2. 常见文本标签
+        const textMatch = str.match(/(?:【姓名】|姓名|Name)\s*[:：]\s*([^\r\n,，]{2,15})/i);
+        if (textMatch && textMatch[1]) {
+            return textMatch[1].trim();
+        }
+
+        // 3. 条目名称与已知好友对比
+        const friends = this.getFriends() || [];
+        for (const f of friends) {
+            const cleanFName = String(f.name || '').replace(/\s+/g, '');
+            if (!cleanFName) continue;
+            if (nameStr.replace(/\s+/g, '').includes(cleanFName)) {
+                return f.name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 群聊专属：动态解析当前群聊的世界书与成员人设
+     * 遵循酒馆原生标准逻辑：
+     * 1. 扫描当前群聊上下文（群名 + 用户名 + 群成员姓名/别名 + 最近群聊天记录 + 用户最新输入）
+     * 2. 无条件激活全部常驻条目（entry.constant === true），确保全局与常驻设定完整可用
+     * 3. 动态触发命中的关键词条目（根据群聊上下文匹配 entry.keys 或 entry.name）
+     * 4. 融合群成员基础人设（friend.personaPrompt）
+     * 5. 条目级严格全局去重（指纹去重 + 文本相互包含去重，保留最完整的一份），绝对不重复添加！
+     * @param {object} params
+     * @param {object} params.group 群对象
+     * @param {Array<object>} params.memberFriends 群成员好友列表
+     * @param {string} params.userText 用户最新输入
+     * @param {string} [params.userName='我'] 用户名
+     * @param {number} [params.maxDepth=10] 群消息扫描深度
+     * @returns {Promise<string>}
+     */
+    static async resolveGroupDynamicWorldInfoPrompt({ group, memberFriends, userText, userName = '我', maxDepth = 10 }) {
+        if (!group || !Array.isArray(memberFriends) || memberFriends.length === 0) return '';
+
+        const groupId = group.id;
+        const history = this.getSession(groupId) || [];
+        const recentMsgs = history.slice(-Math.max(1, maxDepth));
+
+        // 1. 构建群聊上下文消息（群聊历史 + 用户当前输入）
+        const resolverMessages = [];
+        for (const msg of recentMsgs) {
+            resolverMessages.push({
+                name: msg.sender === 'user' ? userName : (msg.senderName || '成员'),
+                is_user: msg.sender === 'user',
+                is_system: false,
+                mes: String(msg.content || '').trim(),
+            });
+        }
+        const cleanUserText = String(userText || '').trim();
+        if (cleanUserText && (resolverMessages.length === 0 || resolverMessages[resolverMessages.length - 1].mes !== cleanUserText)) {
+            resolverMessages.push({
+                name: userName,
+                is_user: true,
+                is_system: false,
+                mes: cleanUserText,
+            });
+        }
+
+        // 2. 组装群聊语料库（群名、用户名、群成员名字及关键词、群消息文本）
+        const memberNames = memberFriends.map(f => String(f.name || '').trim()).filter(Boolean);
+        const memberKeys = memberFriends.flatMap(f => Array.isArray(f.keys) ? f.keys : (typeof f.keys === 'string' ? f.keys.split(',') : [])).filter(Boolean);
+        const scanCorpusParts = [
+            group.name,
+            userName,
+            ...memberNames,
+            ...memberKeys,
+            ...resolverMessages.map(m => m.mes),
+        ];
+        const scanCorpus = scanCorpusParts.filter(Boolean).join('\n').toLowerCase();
+
+        const collectedEntries = [];
+
+        // 3. 通道 1：酒馆原生 resolveWorldInfoForMessages
+        try {
+            const context = (typeof Luker !== 'undefined' && Luker.getContext)
+                ? Luker.getContext()
+                : (typeof getContext === 'function' ? getContext() : null);
+
+            const resolveFn = context?.resolveWorldInfoForMessages
+                || (typeof resolveWorldInfoForMessages === 'function' ? resolveWorldInfoForMessages : null);
+
+            if (typeof resolveFn === 'function') {
+                const resolution = await resolveFn(resolverMessages, {
+                    type: 'quiet',
+                    fallbackToCurrentChat: false,
+                });
+
+                if (resolution) {
+                    const addList = [
+                        ...(resolution.worldInfoBeforeEntries || []),
+                        ...(resolution.worldInfoAfterEntries || []),
+                        ...(resolution.worldInfoDepth?.flatMap(d => d.entries || []) || []),
+                        ...(resolution.anBefore || []),
+                        ...(resolution.anAfter || []),
+                        ...(resolution.activatedEntries?.map(a => a.content) || []),
+                    ];
+                    for (const item of addList) {
+                        if (item && typeof item === 'string') collectedEntries.push(item);
+                    }
+                }
+            }
+        } catch (nativeErr) {
+            console.warn('[QQManager] 群聊调用原生 resolveWorldInfoForMessages 异常:', nativeErr);
+        }
+
+        // 4. 通道 2：内建高穿透扫描器（常驻条目必触发 + 关键词条目动态触发）
+        try {
+            const worldData = await this.scanCurrentCharacterWorldEntries();
+            const entries = worldData?.entries || [];
+
+            for (const entry of entries) {
+                if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
+
+                // 4.1 常驻条目（entry.constant）无条件必触发！
+                if (entry.constant) {
+                    collectedEntries.push(entry.content);
+                    continue;
+                }
+
+                // 4.2 关键词条目（Selective）按群聊语料匹配触发
+                const keys = Array.isArray(entry.keys) ? entry.keys : [];
+                let isMatched = false;
+                for (const k of keys) {
+                    const cleanKey = String(k || '').trim().toLowerCase();
+                    if (cleanKey && scanCorpus.includes(cleanKey)) {
+                        isMatched = true;
+                        break;
+                    }
+                }
+
+                // 条目名称匹配触发
+                if (!isMatched && entry.name) {
+                    const cleanName = String(entry.name).trim().toLowerCase();
+                    if (cleanName.length >= 2 && scanCorpus.includes(cleanName)) {
+                        isMatched = true;
+                    }
+                }
+
+                if (isMatched) {
+                    collectedEntries.push(entry.content);
+                }
+            }
+        } catch (scanErr) {
+            console.warn('[QQManager] 群聊内建世界书扫描异常:', scanErr);
+        }
+
+        // 4.3 收集群成员基础人设（如果存在独立人设设定）
+        for (const f of memberFriends) {
+            const p = String(f.personaPrompt || '').trim();
+            if (p) collectedEntries.push(p);
+        }
+
+        // 5. 严格全局去重池（指纹去重 + 互相包含去重，绝对杜绝任何重复）
+        const finalEntries = [];
+        const seenFingerprints = new Set();
+
+        const getFingerprint = (text) => {
+            return String(text || '').replace(/[\s\r\n\t"'`，。、：:；;{}【】]/g, '').slice(0, 160);
+        };
+
+        for (const rawItem of collectedEntries) {
+            const trimmed = String(rawItem || '').trim();
+            if (!trimmed) continue;
+
+            const fp = getFingerprint(trimmed);
+            if (seenFingerprints.has(fp)) continue;
+
+            // 检查是否已有条目包含了该条目，或该条目包含了已有条目
+            const existingIdx = finalEntries.findIndex(ex => ex.includes(trimmed) || trimmed.includes(ex));
+            if (existingIdx !== -1) {
+                // 如果当前条目比已有条目更长、更完整，替换为更完整的一份，避免片段式重复
+                if (trimmed.length > finalEntries[existingIdx].length) {
+                    finalEntries[existingIdx] = trimmed;
+                }
+                seenFingerprints.add(fp);
+                continue;
+            }
+
+            seenFingerprints.add(fp);
+            finalEntries.push(trimmed);
+        }
+
+        const resultPrompt = finalEntries.join('\n\n').trim();
+        console.debug(`[QQManager] 群聊【${group.name}】世界书触发完毕: 共激活 ${finalEntries.length} 条设定 (常驻必触发 + 关键词动态触发，严格无重复)`);
+        return resultPrompt;
+    }
+
+    /**
      * 像正文聊天一样，根据当前单聊上下文（最新输入 + 历史对话 + 角色信息）动态扫描并触发世界书
+     * 遵循酒馆原生标准逻辑：常驻必触发 + 关键词动态触发 + 全局严格无重复
      * @param {object} params
      * @param {object} params.friend 好友对象
      * @param {string} params.userText 用户最新发送的文本
@@ -1242,7 +1562,7 @@ export class QQManager {
 
         const collectedEntries = [];
 
-        // 2. 通道 1：优先尝试酒馆原生 resolveWorldInfoForMessages（享受与正文完全一致的递归与深度匹配）
+        // 2. 通道 1：优先尝试酒馆原生 resolveWorldInfoForMessages
         try {
             const context = (typeof Luker !== 'undefined' && Luker.getContext)
                 ? Luker.getContext()
@@ -1258,41 +1578,16 @@ export class QQManager {
                 });
 
                 if (resolution) {
-                    if (Array.isArray(resolution.worldInfoBeforeEntries)) {
-                        for (const item of resolution.worldInfoBeforeEntries) {
-                            if (item && typeof item === 'string') collectedEntries.push(item);
-                        }
-                    }
-                    if (Array.isArray(resolution.worldInfoAfterEntries)) {
-                        for (const item of resolution.worldInfoAfterEntries) {
-                            if (item && typeof item === 'string') collectedEntries.push(item);
-                        }
-                    }
-                    if (Array.isArray(resolution.worldInfoDepth)) {
-                        for (const depthItem of resolution.worldInfoDepth) {
-                            if (Array.isArray(depthItem?.entries)) {
-                                for (const item of depthItem.entries) {
-                                    if (item && typeof item === 'string') collectedEntries.push(item);
-                                }
-                            }
-                        }
-                    }
-                    if (Array.isArray(resolution.anBefore)) {
-                        for (const item of resolution.anBefore) {
-                            if (item && typeof item === 'string') collectedEntries.push(item);
-                        }
-                    }
-                    if (Array.isArray(resolution.anAfter)) {
-                        for (const item of resolution.anAfter) {
-                            if (item && typeof item === 'string') collectedEntries.push(item);
-                        }
-                    }
-                    if (Array.isArray(resolution.activatedEntries)) {
-                        for (const act of resolution.activatedEntries) {
-                            if (act?.content && typeof act.content === 'string') {
-                                collectedEntries.push(act.content);
-                            }
-                        }
+                    const addList = [
+                        ...(resolution.worldInfoBeforeEntries || []),
+                        ...(resolution.worldInfoAfterEntries || []),
+                        ...(resolution.worldInfoDepth?.flatMap(d => d.entries || []) || []),
+                        ...(resolution.anBefore || []),
+                        ...(resolution.anAfter || []),
+                        ...(resolution.activatedEntries?.map(a => a.content) || []),
+                    ];
+                    for (const item of addList) {
+                        if (item && typeof item === 'string') collectedEntries.push(item);
                     }
                 }
             }
@@ -1300,7 +1595,7 @@ export class QQManager {
             console.warn('[QQManager] 调用原生 resolveWorldInfoForMessages 异常，将使用内建扫描器补充:', nativeErr);
         }
 
-        // 3. 通道 2：高穿透内建关键词匹配引擎（穿透角色卡绑定的全部主世界书、额外世界书、会话世界书、内嵌世界书）
+        // 3. 通道 2：高穿透内建关键词匹配引擎（常驻条目必触发 + 关键词条目动态触发）
         try {
             const worldData = await this.scanCurrentCharacterWorldEntries();
             const entries = worldData?.entries || [];
@@ -1323,13 +1618,13 @@ export class QQManager {
                 for (const entry of entries) {
                     if (entry.enabled === false || !entry.content || !entry.content.trim()) continue;
 
-                    // 常驻条目直接激活
+                    // 3.1 常驻条目（entry.constant）无条件必触发！
                     if (entry.constant) {
                         collectedEntries.push(entry.content);
                         continue;
                     }
 
-                    // 检查关键词 (keys) 命中
+                    // 3.2 检查关键词 (keys) 命中
                     const keys = Array.isArray(entry.keys) ? entry.keys : [];
                     let isMatched = false;
                     for (const k of keys) {
@@ -1340,7 +1635,7 @@ export class QQManager {
                         }
                     }
 
-                    // 检查条目名称命中（若名称>=2字符且出现在对话中）
+                    // 检查条目名称命中
                     if (!isMatched && entry.name) {
                         const cleanName = String(entry.name).trim().toLowerCase();
                         if (cleanName.length >= 2 && scanCorpus.includes(cleanName)) {
@@ -1357,33 +1652,44 @@ export class QQManager {
             console.warn('[QQManager] 内建世界书扫描匹配异常:', scanErr);
         }
 
-        // 4. 通道 3：好友专属角色人设（守护好友基本性格，去重融合）
+        // 4. 收集好友专属人设（如果存在独立人设设定）
         const friendPersona = String(friend.personaPrompt || '').trim();
-        const finalEntries = [];
-        const seenTexts = new Set();
-
-        // 如果好友有独立基础人设设定，优先将其作为核心人设保留
         if (friendPersona) {
-            finalEntries.push(friendPersona);
-            seenTexts.add(friendPersona);
+            collectedEntries.push(friendPersona);
         }
 
-        // 逐一去重添加上下文动态触发的世界书条目
+        // 5. 严格全局去重池（指纹去重 + 互相包含去重，绝对杜绝任何重复）
+        const finalEntries = [];
+        const seenFingerprints = new Set();
+
+        const getFingerprint = (text) => {
+            return String(text || '').replace(/[\s\r\n\t"'`，。、：:；;{}【】]/g, '').slice(0, 160);
+        };
+
         for (const rawItem of collectedEntries) {
             const trimmed = String(rawItem || '').trim();
-            if (!trimmed || seenTexts.has(trimmed)) continue;
+            if (!trimmed) continue;
 
-            // 如果该条目已经完全被 friendPersona 包含，或者包含 friendPersona，做合理去重
-            if (friendPersona && friendPersona.includes(trimmed)) {
+            const fp = getFingerprint(trimmed);
+            if (seenFingerprints.has(fp)) continue;
+
+            // 检查是否已有条目包含了该条目，或该条目包含了已有条目
+            const existingIdx = finalEntries.findIndex(ex => ex.includes(trimmed) || trimmed.includes(ex));
+            if (existingIdx !== -1) {
+                // 保留更完整的那一份
+                if (trimmed.length > finalEntries[existingIdx].length) {
+                    finalEntries[existingIdx] = trimmed;
+                }
+                seenFingerprints.add(fp);
                 continue;
             }
 
-            seenTexts.add(trimmed);
+            seenFingerprints.add(fp);
             finalEntries.push(trimmed);
         }
 
         const resultPrompt = finalEntries.join('\n\n').trim();
-        console.debug(`[QQManager] 单聊世界书动态触发完毕: 共激活 ${finalEntries.length} 条设定 (包含好友人设 + 上下文触发条目)`);
+        console.debug(`[QQManager] 单聊【${charName}】世界书动态触发完毕: 共激活 ${finalEntries.length} 条设定 (严格无重复)`);
         return resultPrompt;
     }
 
