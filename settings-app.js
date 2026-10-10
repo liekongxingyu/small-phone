@@ -22,6 +22,7 @@ export class SettingsApp {
         const savedPrompt = SettingsManager.getPromptConfig();
         const savedMemory = SettingsManager.getMemoryConfig();
         const currentFontSize = SettingsManager.getChatFontSize();
+        const currentXFontSize = SettingsManager.getXFontSize();
         const maxTokens = Number(savedApi.maxTokens || 300000);
         const maxTokensText = `${(maxTokens / 10000).toFixed(0)}万字`;
         const apiSummaryText = savedApi.model || (savedApi.selectedProfile ? '已选预设' : '未配置');
