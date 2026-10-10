@@ -292,10 +292,10 @@ export class SettingsApp {
                         <div class="sp-group-header" role="button" tabindex="0" title="点击展开/收起">
                             <div class="sp-group-header-left">
                                 <i class="fa-solid fa-text-height sp-group-icon"></i>
-                                <span class="sp-group-title-text">界面显示与正文字号</span>
+                                <span class="sp-group-title-text">界面显示与文字字号</span>
                             </div>
                             <div class="sp-group-header-right">
-                                <span class="sp-group-badge" id="sp-display-summary-badge">正文: ${currentFontSize}px</span>
+                                <span class="sp-group-badge" id="sp-display-summary-badge">QQ: ${currentFontSize}px | X: ${currentXFontSize}px</span>
                                 <i class="fa-solid fa-chevron-right sp-group-chevron"></i>
                             </div>
                         </div>
@@ -304,12 +304,13 @@ export class SettingsApp {
                             <div class="sp-group-inner">
                                 <div class="sp-card">
                                     <div class="sp-section-block">
+                                        <!-- 1. QQ 聊天正文字号调节 -->
                                         <div class="sp-section-title">
-                                            <span>聊天正文字体大小调节</span>
+                                            <span><i class="fa-regular fa-comment-dots" style="color: #38bdf8;"></i> 聊天正文字体大小调节</span>
                                         </div>
                                         <div class="sp-form-item">
                                             <div class="sp-item-header-inline">
-                                                <label for="sp-setting-font-size-slider">正文字号 (Font Size)</label>
+                                                <label for="sp-setting-font-size-slider">聊天正文字号 (Font Size)</label>
                                                 <span class="sp-temp-badge" id="sp-font-size-val">${currentFontSize} px</span>
                                             </div>
 
@@ -341,7 +342,7 @@ export class SettingsApp {
                                             <!-- 实时高仿真预览卡片 -->
                                             <div class="sp-font-preview-box">
                                                 <div class="sp-font-preview-title">
-                                                    <i class="fa-solid fa-eye"></i> 实时正文字号预览效果
+                                                    <i class="fa-solid fa-eye"></i> 实时聊天字号预览效果
                                                 </div>
                                                 <div style="display: flex; gap: 6px; align-items: flex-start; margin-top: 4px;">
                                                     <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #ec4899; color: #fff; font-size: 9.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0; margin-top: 1px;">小</div>
@@ -359,10 +360,76 @@ export class SettingsApp {
                                             </span>
                                         </div>
 
+                                        <!-- 分割线 -->
+                                        <div style="margin: 18px 0 14px; border-top: 1px dashed rgba(255, 255, 255, 0.1);"></div>
+
+                                        <!-- 2. 社交平台 X 文字字号调节 -->
+                                        <div class="sp-section-title" style="margin-bottom: 8px;">
+                                            <span><i class="fa-brands fa-x-twitter" style="color: #38bdf8;"></i> 社交平台 X 文字字号调节</span>
+                                        </div>
+                                        <div class="sp-form-item">
+                                            <div class="sp-item-header-inline">
+                                                <label for="sp-setting-x-font-size-slider">X 文字字号 (X Font Size)</label>
+                                                <span class="sp-temp-badge" id="sp-x-font-size-val">${currentXFontSize} px</span>
+                                            </div>
+
+                                            <!-- 精细调节控制行：减号 + 滑块 + 加号 + 精确数值输入 -->
+                                            <div class="sp-font-adjust-row">
+                                                <button type="button" class="sp-font-adjust-btn" id="sp-x-font-size-minus" title="减少 0.5px">
+                                                    <i class="fa-solid fa-minus"></i>
+                                                </button>
+                                                <input type="range" id="sp-setting-x-font-size-slider" class="sp-slider" min="9.0" max="20.0" step="0.5" value="${currentXFontSize}" style="flex: 1;" />
+                                                <button type="button" class="sp-font-adjust-btn" id="sp-x-font-size-plus" title="增加 0.5px">
+                                                    <i class="fa-solid fa-plus"></i>
+                                                </button>
+                                                <input type="number" id="sp-setting-x-font-size-number" class="sp-input sp-input-number-compact" min="8" max="28" step="0.5" value="${currentXFontSize}" style="width: 58px; text-align: center;" />
+                                            </div>
+
+                                            <div class="sp-slider-labels">
+                                                <span>紧凑 (9px)</span>
+                                                <span>默认 (12px)</span>
+                                                <span>大字 (16px)</span>
+                                                <span>超大 (20px)</span>
+                                            </div>
+
+                                            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                                                <button type="button" class="sp-btn-link" id="sp-x-font-size-reset-btn" title="一键恢复到默认大小">
+                                                    <i class="fa-solid fa-rotate-left"></i> 恢复默认 (12.0px)
+                                                </button>
+                                            </div>
+
+                                            <!-- 实时高仿真 X 推文预览卡片 -->
+                                            <div class="sp-font-preview-box" style="margin-top: 10px;">
+                                                <div class="sp-font-preview-title">
+                                                    <i class="fa-solid fa-eye"></i> 实时 X 推文与互动字号效果
+                                                </div>
+                                                <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 10px; margin-top: 6px;">
+                                                    <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                                        <div style="width: 22px; height: 22px; border-radius: 50%; background: #1d9bf0; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px;">X</div>
+                                                        <div style="flex: 1; min-width: 0;">
+                                                            <div style="font-size: 10.5px; color: #71767b; line-height: 1.2; margin-bottom: 3px;">
+                                                                <strong style="color: #fff;">圣华学报</strong> @seika_news · 刚刚
+                                                            </div>
+                                                            <div id="sp-x-font-preview-body" style="color: #e7e9ea; line-height: 1.45; font-size: var(--sp-x-font-size, 12px);">
+                                                                今天校园祭圆满落幕，感谢大家的参与！这是 X 平台文字字号预览效果~
+                                                            </div>
+                                                            <div id="sp-x-font-preview-comment" style="margin-top: 5px; padding: 4px 6px; background: #0f1115; border-radius: 4px; color: #cbd5e1; font-size: calc(var(--sp-x-font-size, 12px) - 1px); line-height: 1.35;">
+                                                                <span style="color: #38bdf8; font-weight: 600;">@小春心绘:</span> 辛苦大家啦！(=^･ω･^=)
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <span class="sp-field-hint" style="margin-top: 8px;">
+                                                全局控制社交平台 X 中的推文正文、评论互动、热搜词条与动态记录预览等字号大小。支持 0.5px 精细调节，修改实时生效并自动持久化。
+                                            </span>
+                                        </div>
+
                                         <!-- 保存按钮 -->
-                                        <div class="sp-form-actions">
+                                        <div class="sp-form-actions" style="margin-top: 16px;">
                                             <button type="button" class="sp-btn sp-btn-primary" id="sp-setting-save-display-btn">
-                                                <i class="fa-solid fa-floppy-disk"></i> 保存显示配置
+                                                <i class="fa-solid fa-floppy-disk"></i> 保存显示与字号配置
                                             </button>
                                         </div>
                                     </div>
@@ -606,7 +673,7 @@ export class SettingsApp {
                     status: 'success',
                     detail: `正文深度: ${depth} 条 (${rounds} 轮)`,
                 });
-            } catch (_) { }
+            } catch (_) {}
 
             if (typeof toastr !== 'undefined') {
                 toastr.success(`记忆配置已保存！正文上下文深度：${depth} 条 (${rounds} 轮)`, 'SmallPhone');
@@ -615,12 +682,25 @@ export class SettingsApp {
             }
         });
 
-        // ------------------ 显示与正文字号事件绑定 ------------------
+        // ------------------ 显示与文字字号事件绑定 ------------------
         const $fontSlider = this.container.find('#sp-setting-font-size-slider');
         const $fontNumber = this.container.find('#sp-setting-font-size-number');
         const $fontValBadge = this.container.find('#sp-font-size-val');
         const $fontSummaryBadge = this.container.find('#sp-display-summary-badge');
         const $previewBubble = this.container.find('#sp-font-preview-bubble');
+
+        // X 文字字号元素
+        const $xFontSlider = this.container.find('#sp-setting-x-font-size-slider');
+        const $xFontNumber = this.container.find('#sp-setting-x-font-size-number');
+        const $xFontValBadge = this.container.find('#sp-x-font-size-val');
+        const $xPreviewBody = this.container.find('#sp-x-font-preview-body');
+        const $xPreviewComment = this.container.find('#sp-x-font-preview-comment');
+
+        const updateDisplaySummary = () => {
+            const qSize = Math.round((parseFloat($fontNumber.val()) || 11.5) * 10) / 10;
+            const xSize = Math.round((parseFloat($xFontNumber.val()) || 12.0) * 10) / 10;
+            $fontSummaryBadge.text(`QQ: ${qSize}px | X: ${xSize}px`);
+        };
 
         const syncFontSize = (val, shouldSave = false) => {
             let num = parseFloat(val);
@@ -631,7 +711,7 @@ export class SettingsApp {
             $fontSlider.val(fixed);
             $fontNumber.val(fixed);
             $fontValBadge.text(`${fixed} px`);
-            $fontSummaryBadge.text(`正文: ${fixed}px`);
+            updateDisplaySummary();
 
             // 实时应用到全局 CSS 变量与预览气泡
             SettingsManager.applyChatFontSize(fixed);
@@ -641,6 +721,32 @@ export class SettingsApp {
 
             if (shouldSave) {
                 SettingsManager.saveChatFontSize(fixed);
+            }
+            return fixed;
+        };
+
+        const syncXFontSize = (val, shouldSave = false) => {
+            let num = parseFloat(val);
+            if (isNaN(num)) num = 12.0;
+            num = Math.max(8.0, Math.min(28.0, num));
+            const fixed = Math.round(num * 10) / 10;
+
+            $xFontSlider.val(fixed);
+            $xFontNumber.val(fixed);
+            $xFontValBadge.text(`${fixed} px`);
+            updateDisplaySummary();
+
+            // 实时应用到全局 CSS 变量与预览卡片
+            SettingsManager.applyXFontSize(fixed);
+            if ($xPreviewBody.length > 0) {
+                $xPreviewBody[0].style.setProperty('font-size', `${fixed}px`, 'important');
+            }
+            if ($xPreviewComment.length > 0) {
+                $xPreviewComment[0].style.setProperty('font-size', `${Math.max(7, fixed - 1)}px`, 'important');
+            }
+
+            if (shouldSave) {
+                SettingsManager.saveXFontSize(fixed);
             }
             return fixed;
         };
@@ -669,26 +775,53 @@ export class SettingsApp {
         this.container.find('#sp-font-size-reset-btn').on('click', () => {
             syncFontSize(11.5, true);
             if (typeof toastr !== 'undefined') {
-                toastr.info('已恢复正文字号为默认值: 11.5px', 'SmallPhone');
+                toastr.info('已恢复聊天正文字号为默认值: 11.5px', 'SmallPhone');
             }
         });
 
-        // 保存显示配置
+        // X 文字字号事件绑定
+        $xFontSlider.on('input change', (e) => {
+            syncXFontSize($(e.target).val());
+        });
+
+        $xFontNumber.on('input change', (e) => {
+            syncXFontSize($(e.target).val());
+        });
+
+        this.container.find('#sp-x-font-size-minus').on('click', () => {
+            const current = parseFloat($xFontNumber.val()) || 12.0;
+            syncXFontSize(current - 0.5);
+        });
+
+        this.container.find('#sp-x-font-size-plus').on('click', () => {
+            const current = parseFloat($xFontNumber.val()) || 12.0;
+            syncXFontSize(current + 0.5);
+        });
+
+        this.container.find('#sp-x-font-size-reset-btn').on('click', () => {
+            syncXFontSize(12.0, true);
+            if (typeof toastr !== 'undefined') {
+                toastr.info('已恢复 X 文字字号为默认值: 12.0px', 'SmallPhone');
+            }
+        });
+
+        // 保存显示与字号配置
         this.container.find('#sp-setting-save-display-btn').on('click', () => {
-            const finalSize = syncFontSize($fontNumber.val(), true);
+            const finalChatSize = syncFontSize($fontNumber.val(), true);
+            const finalXSize = syncXFontSize($xFontNumber.val(), true);
             try {
                 OperationLogService.log({
                     module: '系统设置',
-                    action: '保存正文字号',
+                    action: '保存文字字号',
                     status: 'success',
-                    detail: `正文字号: ${finalSize}px`,
+                    detail: `聊天正文: ${finalChatSize}px, X平台字号: ${finalXSize}px`,
                 });
-            } catch (_) { }
+            } catch (_) {}
 
             if (typeof toastr !== 'undefined') {
-                toastr.success(`正文字号已保存并生效！当前：${finalSize}px`, 'SmallPhone');
+                toastr.success(`字号配置已保存并生效！聊天：${finalChatSize}px，X：${finalXSize}px`, 'SmallPhone');
             } else {
-                alert(`正文字号已保存并生效！当前：${finalSize}px`);
+                alert(`字号配置已保存并生效！聊天：${finalChatSize}px，X：${finalXSize}px`);
             }
         });
 
@@ -813,7 +946,7 @@ export class SettingsApp {
                 status: 'success',
                 detail: `模型: ${newConfig.model || '未指定'} | 预设: ${newConfig.selectedProfile || '直连'} | 最大词符: ${newConfig.maxTokens}`,
             });
-        } catch (_) { }
+        } catch (_) {}
 
         if (typeof toastr !== 'undefined') {
             toastr.success('SmallPhone API 配置已保存至系统！', 'SmallPhone');
@@ -870,7 +1003,7 @@ export class SettingsApp {
                     status: 'success',
                     detail: `模式: ${selectedScenario} | 耗时: ${result.timeMs}ms`,
                 });
-            } catch (_) { }
+            } catch (_) {}
         } catch (err) {
             $status.attr('class', 'sp-test-status sp-status-error').html('<i class="fa-solid fa-circle-xmark"></i> 测试失败');
             $meta.text('错误');
@@ -889,7 +1022,7 @@ export class SettingsApp {
                     status: 'error',
                     detail: `模式: ${selectedScenario} | 错误: ${errMsg}`,
                 });
-            } catch (_) { }
+            } catch (_) {}
         } finally {
             $btn.prop('disabled', false).html('<i class="fa-solid fa-paper-plane"></i> 重新发送“你好”测试');
         }

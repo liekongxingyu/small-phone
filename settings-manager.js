@@ -14,6 +14,7 @@ const defaultSettings = {
     },
     theme: 'dark',
     chatFontSize: 11.5, // 聊天正文字体大小，默认 11.5px
+    xFontSize: 12.0,    // 社交平台 X 文字字体大小，默认 12.0px
     apiConfig: {
         selectedProfile: '__current_main__',
         apiUrl: '',
@@ -44,6 +45,7 @@ export class SettingsManager {
             ...extension_settings[EXTENSION_NAME],
         });
         this.applyChatFontSize();
+        this.applyXFontSize();
     }
 
     static getSettings() {
@@ -170,6 +172,36 @@ export class SettingsManager {
         const valid = size !== undefined ? parseFloat(size) : this.getChatFontSize();
         if (typeof document !== 'undefined' && document.documentElement) {
             document.documentElement.style.setProperty('--sp-chat-font-size', `${valid}px`);
+        }
+    }
+
+    /**
+     * 获取社交平台 X 文字字体大小（默认 12.0px）
+     */
+    static getXFontSize() {
+        const settings = this.getSettings();
+        const val = parseFloat(settings.xFontSize);
+        return (!isNaN(val) && val >= 8 && val <= 32) ? val : 12.0;
+    }
+
+    /**
+     * 保存社交平台 X 文字字体大小并即时应用生效
+     */
+    static saveXFontSize(size) {
+        const val = parseFloat(size);
+        const valid = (!isNaN(val) && val >= 8 && val <= 32) ? val : 12.0;
+        this.set('xFontSize', valid);
+        this.applyXFontSize(valid);
+        return valid;
+    }
+
+    /**
+     * 将当前配置的 X 字体大小动态应用到 DOM 根节点 CSS 变量中
+     */
+    static applyXFontSize(size) {
+        const valid = size !== undefined ? parseFloat(size) : this.getXFontSize();
+        if (typeof document !== 'undefined' && document.documentElement) {
+            document.documentElement.style.setProperty('--sp-x-font-size', `${valid}px`);
         }
     }
 

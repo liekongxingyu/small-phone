@@ -284,6 +284,8 @@ export class QQApp {
         this.selectedUids = new Set(); // 导入弹窗中选中的条目 UID 集合
         this.searchKeyword = ''; // 世界书搜索过滤关键词
         this.contactsSearchKeyword = ''; // 联系人界面搜索过滤关键词
+        this.createGroupSearchKeyword = ''; // 发起群聊搜索过滤关键词
+        this.addMemberSearchKeyword = ''; // 群聊添加新人搜索过滤关键词
         this.isGenerating = false; // 是否正在生成中
         this.isMultiSelectMode = false; // 是否处于多选删除模式
         this.selectedMessageIds = new Set(); // 多选模式下选中的消息 ID 集合
@@ -576,6 +578,14 @@ export class QQApp {
                                     <label style="margin: 0;">选择群成员 (支持多选)</label>
                                     <span class="sp-qq-group-pick-count" id="sp-qq-group-pick-count" style="font-size: 11px; color: #38bdf8; font-weight: 600;">已选 0 人</span>
                                 </div>
+                                <!-- 候选好友搜索框 -->
+                                <div class="sp-qq-search-box" style="margin-bottom: 6px;">
+                                    <i class="fa-solid fa-magnifying-glass sp-qq-search-icon"></i>
+                                    <input type="text" class="sp-qq-search-input" id="sp-qq-create-group-search-input" placeholder="搜索好友姓名、备注或QQ号..." autocomplete="off" />
+                                    <button type="button" class="sp-qq-search-clear-btn" id="sp-qq-create-group-search-clear" style="display: none;" title="清空搜索">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
                                 <div class="sp-qq-group-members-list" id="sp-qq-group-members-list" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 4px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
                                     <!-- 由 _renderGroupMemberPicker 动态填充 -->
                                 </div>
@@ -631,6 +641,14 @@ export class QQApp {
                                 <div class="sp-qq-group-add-header">
                                     <span>选择要拉入群聊的联系人：</span>
                                     <button type="button" class="sp-qq-btn-text" id="sp-qq-group-add-cancel-btn">收起</button>
+                                </div>
+                                <!-- 待添加群成员搜索框 -->
+                                <div class="sp-qq-search-box" style="margin-bottom: 6px;">
+                                    <i class="fa-solid fa-magnifying-glass sp-qq-search-icon"></i>
+                                    <input type="text" class="sp-qq-search-input" id="sp-qq-add-member-search-input" placeholder="搜索待添加好友姓名、备注或QQ号..." autocomplete="off" />
+                                    <button type="button" class="sp-qq-search-clear-btn" id="sp-qq-add-member-search-clear" style="display: none;" title="清空搜索">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
                                 </div>
                                 <div class="sp-qq-group-add-candidates" id="sp-qq-group-add-candidates">
                                     <!-- 动态渲染非群成员好友 -->
@@ -1629,7 +1647,10 @@ export class QQApp {
         }
 
         this.groupSelectedFriendIds = new Set();
+        this.createGroupSearchKeyword = '';
         this.container.find('#sp-qq-group-name-input').val('');
+        this.container.find('#sp-qq-create-group-search-input').val('');
+        this.container.find('#sp-qq-create-group-search-clear').hide();
         this._renderGroupMemberPicker(friends);
         this._updateGroupCreateButtonState();
         this.container.find('#sp-qq-create-group-modal').show();
@@ -1639,15 +1660,40 @@ export class QQApp {
     }
 
     /**
-     * 渲染群成员多选候选列表
+     * 渲染群成员多选候选列表（支持实时搜索过滤与多选状态保持）
      */
-    _renderGroupMemberPicker(friends) {
+    _renderGroupMemberPicker(friends = null) {
+        if (!friends) {
+            friends = QQManager.getFriends();
+        }
         const $picker = this.container.find('#sp-qq-group-members-list');
         $picker.empty();
 
-        friends.forEach(f => {
+        const kw = (this.createGroupSearchKeyword || '').toLowerCase().trim();
+        const filteredFriends = friends.filter(f => {
+            if (!kw) return true;
+            const name = String(f.name || '').toLowerCase();
+            const remark = String(f.remark || '').toLowerCase();
+            const qq = String(f.qqNumber || '').toLowerCase();
+            return name.includes(kw) || remark.includes(kw) || qq.includes(kw);
+        });
+
+        if (filteredFriends.length === 0) {
+            $picker.html(`
+                <div style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.45); padding: 16px 8px;">
+                    <i class="fa-solid fa-magnifying-glass" style="margin-right: 4px;"></i> 未找到匹配的好友
+                </div>
+            `);
+            return;
+        }
+
+        filteredFriends.forEach(f => {
             const initialChar = (f.name || '友').slice(0, 1).toUpperCase();
             const isChecked = this.groupSelectedFriendIds.has(f.id);
+            const safeName = $('<div>').text(f.name || '好友').html();
+            const remarkText = f.remark ? $('<div>').text(f.remark).html() : '';
+            const subInfo = f.remark ? `${remarkText} · QQ: ${f.qqNumber || '---'}` : `QQ: ${f.qqNumber || '---'}`;
+
             const itemHtml = `
                 <div class="sp-qq-group-picker-item ${isChecked ? 'selected' : ''}" data-id="${f.id}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; background: ${isChecked ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.03)'}; border: 1px solid ${isChecked ? 'rgba(56, 189, 248, 0.4)' : 'transparent'}; transition: all 0.15s ease;">
                     <input type="checkbox" class="sp-qq-group-member-check" data-id="${f.id}" ${isChecked ? 'checked' : ''} style="cursor: pointer; pointer-events: none; accent-color: #0284c7; width: 14px; height: 14px;" />
@@ -1655,8 +1701,8 @@ export class QQApp {
                         ${initialChar}
                     </div>
                     <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-                        <span style="font-size: 11.5px; font-weight: 500; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f.name}</span>
-                        ${f.remark ? `<span style="font-size: 9.5px; color: rgba(255, 255, 255, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${f.remark}</span>` : ''}
+                        <span style="font-size: 11.5px; font-weight: 500; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${safeName}</span>
+                        <span style="font-size: 9.5px; color: rgba(255, 255, 255, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${subInfo}</span>
                     </div>
                 </div>
             `;
@@ -1706,6 +1752,9 @@ export class QQApp {
         if (!group) return;
 
         this.groupAddCandidateIds = new Set();
+        this.addMemberSearchKeyword = '';
+        this.container.find('#sp-qq-add-member-search-input').val('');
+        this.container.find('#sp-qq-add-member-search-clear').hide();
         this._renderGroupInfoModal(groupId);
         this.container.find('#sp-qq-group-info-modal').show();
     }
@@ -1775,7 +1824,7 @@ export class QQApp {
     }
 
     /**
-     * 渲染“添加成员”候选好友列表（过滤掉已经在群里的好友）
+     * 渲染“添加成员”候选好友列表（过滤掉已经在群里的好友，支持实时搜索与多选状态保持）
      */
     _renderGroupAddCandidates(groupId) {
         const group = QQManager.getGroup(groupId);
@@ -1798,7 +1847,26 @@ export class QQApp {
             return;
         }
 
-        const candidatesHtml = nonMembers.map(f => {
+        const kw = (this.addMemberSearchKeyword || '').toLowerCase().trim();
+        const filtered = nonMembers.filter(f => {
+            if (!kw) return true;
+            const name = String(f.name || '').toLowerCase();
+            const remark = String(f.remark || '').toLowerCase();
+            const qq = String(f.qqNumber || '').toLowerCase();
+            return name.includes(kw) || remark.includes(kw) || qq.includes(kw);
+        });
+
+        if (filtered.length === 0) {
+            $candidates.html(`
+                <div style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.45); padding: 14px 6px;">
+                    <i class="fa-solid fa-magnifying-glass" style="margin-right: 4px;"></i> 未找到匹配的好友
+                </div>
+            `);
+            this._updateGroupAddCandidateState();
+            return;
+        }
+
+        const candidatesHtml = filtered.map(f => {
             const safeName = $('<div>').text(f.name || '好友').html();
             const initialChar = (f.name || '友').slice(0, 1).toUpperCase();
             const isChecked = this.groupAddCandidateIds.has(f.id);
@@ -1911,6 +1979,21 @@ export class QQApp {
             this.openCreateGroupModal();
         });
 
+        // 3.1.1 发起群聊：搜索输入监听
+        this.container.on('input', '#sp-qq-create-group-search-input', (e) => {
+            this.createGroupSearchKeyword = $(e.target).val().trim();
+            this.container.find('#sp-qq-create-group-search-clear').toggle(Boolean(this.createGroupSearchKeyword));
+            this._renderGroupMemberPicker();
+        });
+
+        // 3.1.2 发起群聊：清空搜索框
+        this.container.on('click', '#sp-qq-create-group-search-clear', () => {
+            this.createGroupSearchKeyword = '';
+            this.container.find('#sp-qq-create-group-search-input').val('').focus();
+            this.container.find('#sp-qq-create-group-search-clear').hide();
+            this._renderGroupMemberPicker();
+        });
+
         // 3.2 建群弹窗内：勾选/反选群成员
         this.container.on('click', '.sp-qq-group-picker-item', (e) => {
             const friendId = $(e.currentTarget).data('id');
@@ -1975,6 +2058,9 @@ export class QQApp {
                 $panel.hide();
             } else {
                 this.groupAddCandidateIds = new Set();
+                this.addMemberSearchKeyword = '';
+                this.container.find('#sp-qq-add-member-search-input').val('');
+                this.container.find('#sp-qq-add-member-search-clear').hide();
                 this._renderGroupAddCandidates(this.activeChatId);
                 $panel.show();
             }
@@ -1983,6 +2069,24 @@ export class QQApp {
         this.container.on('click', '#sp-qq-group-add-cancel-btn', () => {
             this.container.find('#sp-qq-group-add-panel').hide();
             this.groupAddCandidateIds = new Set();
+            this.addMemberSearchKeyword = '';
+            this.container.find('#sp-qq-add-member-search-input').val('');
+            this.container.find('#sp-qq-add-member-search-clear').hide();
+        });
+
+        // 3.7.1 添加成员：搜索输入监听
+        this.container.on('input', '#sp-qq-add-member-search-input', (e) => {
+            this.addMemberSearchKeyword = $(e.target).val().trim();
+            this.container.find('#sp-qq-add-member-search-clear').toggle(Boolean(this.addMemberSearchKeyword));
+            this._renderGroupAddCandidates(this.activeChatId);
+        });
+
+        // 3.7.2 添加成员：清空搜索框
+        this.container.on('click', '#sp-qq-add-member-search-clear', () => {
+            this.addMemberSearchKeyword = '';
+            this.container.find('#sp-qq-add-member-search-input').val('').focus();
+            this.container.find('#sp-qq-add-member-search-clear').hide();
+            this._renderGroupAddCandidates(this.activeChatId);
         });
 
         // 3.8 候选成员勾选/反选切换
@@ -2011,6 +2115,9 @@ export class QQApp {
 
             QQManager.addGroupMembers(groupId, idsToAdd);
             this.groupAddCandidateIds.clear();
+            this.addMemberSearchKeyword = '';
+            this.container.find('#sp-qq-add-member-search-input').val('');
+            this.container.find('#sp-qq-add-member-search-clear').hide();
             this.container.find('#sp-qq-group-add-panel').hide();
 
             this._renderGroupInfoModal(groupId);
