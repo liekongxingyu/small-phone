@@ -3,6 +3,7 @@ import { ApiService } from './api-service.js';
 import { PromptManager } from './prompt-manager.js';
 import { PromptStudio } from './prompt-studio.js';
 import { OperationLogService } from './operation-log-service.js';
+import { QQManager } from './qq-manager.js';
 
 /**
  * SettingsApp 类：管理小手机内部的“设置”界面与“API 配置”子模块
@@ -29,6 +30,11 @@ export class SettingsApp {
         const memorySummaryText = savedMemory.chatHistoryDepth > 0
             ? `${savedMemory.chatHistoryDepth}条 (${(savedMemory.chatHistoryDepth / 2).toFixed(1).replace('.0', '')}轮)`
             : '已关闭 (0条)';
+
+        const currentChar = QQManager.getCurrentCharacter();
+        const qqFriends = QQManager.getFriends();
+        const qqGroups = QQManager.getGroups();
+        const backupSummaryText = `${qqFriends.length}联系人 · ${qqGroups.length}群聊`;
 
 
         const template = `
@@ -439,7 +445,85 @@ export class SettingsApp {
                         </div>
                     </div>
 
-                    <!-- 模块 5：关于 (默认收起 is-collapsed) -->
+                    <!-- 模块 5：QQ 数据备份与跨卡迁移 (默认收起 is-collapsed) -->
+                    <div class="sp-settings-group is-collapsed" data-group="backup">
+                        <div class="sp-group-header" role="button" tabindex="0" title="点击展开/收起">
+                            <div class="sp-group-header-left">
+                                <i class="fa-solid fa-file-export sp-group-icon" style="color: #38bdf8;"></i>
+                                <span class="sp-group-title-text">QQ 数据备份与跨卡迁移</span>
+                            </div>
+                            <div class="sp-group-header-right">
+                                <span class="sp-group-badge" id="sp-backup-summary-badge">${backupSummaryText}</span>
+                                <i class="fa-solid fa-chevron-right sp-group-chevron"></i>
+                            </div>
+                        </div>
+
+                        <div class="sp-group-body">
+                            <div class="sp-group-inner">
+                                <div class="sp-card">
+                                    <div class="sp-section-block">
+                                        <!-- 当前归属角色卡提示栏 -->
+                                        <div class="sp-backup-char-banner" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px; margin-bottom: 12px;">
+                                            <div style="width: 32px; height: 32px; border-radius: 8px; background: #0284c7; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;">
+                                                <i class="fa-solid fa-address-book"></i>
+                                            </div>
+                                            <div style="flex: 1; min-width: 0;">
+                                                <div style="font-size: 11px; color: rgba(255, 255, 255, 0.6); line-height: 1.2;">当前激活角色卡</div>
+                                                <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="sp-backup-char-name">
+                                                    ${currentChar.name || '未选择角色'}
+                                                </div>
+                                            </div>
+                                            <span class="sp-tag-success" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3);">卡级独立存储</span>
+                                        </div>
+
+                                        <!-- 数据资产统计两列网格 -->
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px;">
+                                            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column;">
+                                                <span style="font-size: 10.5px; color: rgba(255, 255, 255, 0.55);"><i class="fa-solid fa-user" style="color: #38bdf8; margin-right: 4px;"></i>QQ 联系人</span>
+                                                <span style="font-size: 16px; font-weight: 700; color: #ffffff; margin-top: 2px;" id="sp-backup-friends-count">${qqFriends.length} <span style="font-size: 10.5px; font-weight: normal; color: rgba(255, 255, 255, 0.45);">人</span></span>
+                                            </div>
+                                            <div style="background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column;">
+                                                <span style="font-size: 10.5px; color: rgba(255, 255, 255, 0.55);"><i class="fa-solid fa-users" style="color: #a855f7; margin-right: 4px;"></i>QQ 群聊</span>
+                                                <span style="font-size: 16px; font-weight: 700; color: #ffffff; margin-top: 2px;" id="sp-backup-groups-count">${qqGroups.length} <span style="font-size: 10.5px; font-weight: normal; color: rgba(255, 255, 255, 0.45);">个</span></span>
+                                            </div>
+                                        </div>
+
+                                        <!-- 一键导出操作区 -->
+                                        <div class="sp-section-title" style="margin-bottom: 6px;">
+                                            <span><i class="fa-solid fa-file-arrow-down" style="color: #38bdf8;"></i> 一键导出当前 QQ 数据</span>
+                                        </div>
+                                        <p class="sp-field-hint" style="margin: 0 0 10px 0; line-height: 1.45;">
+                                            将当前角色卡下的所有 QQ 联系人和群聊（含完整群聊成员）合并打包为单个 <code>.json</code> 文件。无需分开下载，一键直接保存。
+                                        </p>
+                                        <div class="sp-form-actions" style="margin-top: 0; margin-bottom: 14px;">
+                                            <button type="button" class="sp-btn sp-btn-primary" id="sp-backup-export-btn" style="width: 100%; justify-content: center;">
+                                                <i class="fa-solid fa-file-arrow-down"></i> 一键导出当前卡 QQ 数据 (JSON)
+                                            </button>
+                                        </div>
+
+                                        <!-- 分割虚线 -->
+                                        <div style="margin: 14px 0; border-top: 1px dashed rgba(255, 255, 255, 0.1);"></div>
+
+                                        <!-- 一键导入操作区 -->
+                                        <div class="sp-section-title" style="margin-bottom: 6px;">
+                                            <span><i class="fa-solid fa-file-arrow-up" style="color: #a855f7;"></i> 一键导入 / 跨卡迁移 QQ 数据</span>
+                                        </div>
+                                        <p class="sp-field-hint" style="margin: 0 0 10px 0; line-height: 1.45;">
+                                            选择之前导出的 JSON 备份文件。<strong>无需核对角色卡一致性</strong>，不论来源于哪个角色卡，均可直接导入到当前角色卡中使用！
+                                        </p>
+                                        <div class="sp-form-actions" style="margin-top: 0;">
+                                            <input type="file" id="sp-backup-import-input" accept=".json,application/json" style="display: none;" />
+                                            <button type="button" class="sp-btn sp-btn-secondary" id="sp-backup-import-btn" style="width: 100%; justify-content: center; background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.35); color: #d8b4fe;">
+                                                <i class="fa-solid fa-file-arrow-up"></i> 一键导入 QQ 数据 (JSON)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 模块 6：关于 (默认收起 is-collapsed) -->
                     <div class="sp-settings-group is-collapsed" data-group="about">
                         <div class="sp-group-header" role="button" tabindex="0" title="点击展开/收起">
                             <div class="sp-group-header-left">
@@ -464,6 +548,32 @@ export class SettingsApp {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 导入确认模态框 -->
+                <div class="sp-qq-modal-overlay" id="sp-backup-import-modal" style="display: none;">
+                    <div class="sp-qq-modal-card" style="max-width: 320px;">
+                        <div class="sp-qq-modal-header">
+                            <div class="sp-qq-modal-title">
+                                <i class="fa-solid fa-file-import" style="color: #a855f7;"></i>
+                                <span>导入 QQ 数据</span>
+                            </div>
+                            <button type="button" class="sp-qq-modal-close" id="sp-backup-modal-close">&times;</button>
+                        </div>
+                        <div class="sp-qq-modal-body" style="padding: 12px 14px; gap: 10px;">
+                            <div style="font-size: 11.5px; color: rgba(255, 255, 255, 0.85); line-height: 1.5;" id="sp-backup-modal-info">
+                            </div>
+                            <div style="padding: 8px 10px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; font-size: 11px; color: #bae6fd; line-height: 1.45;">
+                                <i class="fa-solid fa-circle-info" style="color: #38bdf8; margin-right: 4px;"></i>
+                                跨角色卡导入无需名称相同，数据将直接生效于当前角色卡。
+                            </div>
+                        </div>
+                        <div class="sp-qq-modal-footer" style="padding: 8px 12px; gap: 8px; flex-wrap: wrap; height: auto;">
+                            <button type="button" class="sp-btn sp-btn-secondary" id="sp-backup-modal-cancel" style="flex: 1; padding: 6px 8px; font-size: 11px;">取消</button>
+                            <button type="button" class="sp-btn" id="sp-backup-modal-overwrite" style="flex: 1; padding: 6px 8px; font-size: 11px; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">完全覆盖</button>
+                            <button type="button" class="sp-btn sp-btn-primary" id="sp-backup-modal-merge" style="flex: 1.5; padding: 6px 8px; font-size: 11px;">追加合并(推荐)</button>
                         </div>
                     </div>
                 </div>
@@ -830,6 +940,126 @@ export class SettingsApp {
         this.container.find('#sp-setting-test-msg-btn').on('click', async () => {
             await this.handleTestMessage();
         });
+
+        // ------------------ QQ 数据备份与跨卡迁移事件绑定 ------------------
+        // 一键导出当前角色卡 QQ 数据
+        this.container.find('#sp-backup-export-btn').on('click', () => {
+            try {
+                const result = QQManager.downloadQqBackup();
+                const tipMsg = `已成功导出 QQ 数据（${result.friendsCount} 位联系人，${result.groupsCount} 个群聊）！`;
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(tipMsg, 'SmallPhone');
+                } else {
+                    alert(`${tipMsg}\n保存文件：${result.filename}`);
+                }
+            } catch (e) {
+                console.error('[SettingsApp] 导出 QQ 数据失败:', e);
+                const errMsg = `导出失败: ${e.message}`;
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(errMsg, 'SmallPhone');
+                } else {
+                    alert(errMsg);
+                }
+            }
+        });
+
+        // 一键导入：点击触发隐藏 input
+        const $fileInput = this.container.find('#sp-backup-import-input');
+        const $importModal = this.container.find('#sp-backup-import-modal');
+        let pendingImportJson = null;
+
+        this.container.find('#sp-backup-import-btn').on('click', () => {
+            $fileInput.val('');
+            $fileInput.trigger('click');
+        });
+
+        // 监听文件选取与解析
+        $fileInput.on('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const text = event.target.result;
+                    const parsed = JSON.parse(text);
+                    const friends = Array.isArray(parsed.friends) ? parsed.friends : (parsed.data?.friends || []);
+                    const groups = Array.isArray(parsed.groups) ? parsed.groups : (parsed.data?.groups || []);
+
+                    if (friends.length === 0 && groups.length === 0) {
+                        throw new Error('未在所选 JSON 文件中找到任何有效联系人或群聊数据');
+                    }
+
+                    pendingImportJson = parsed;
+
+                    const sourceCharName = parsed.character?.name || '未知来源角色';
+                    const currentChar = QQManager.getCurrentCharacter();
+
+                    const modalHtml = `
+                        <div style="margin-bottom: 6px;"><b>备份文件来源角色：</b><span style="color: #60a5fa;">${sourceCharName}</span></div>
+                        <div style="margin-bottom: 6px;"><b>当前目标角色卡：</b><span style="color: #4ade80;">${currentChar.name}</span></div>
+                        <div><b>待导入数据清单：</b>包含 <strong style="color: #f1f5f9;">${friends.length}</strong> 位联系人，<strong style="color: #f1f5f9;">${groups.length}</strong> 个群聊（含完整群成员）。</div>
+                    `;
+                    this.container.find('#sp-backup-modal-info').html(modalHtml);
+                    $importModal.fadeIn(150);
+                } catch (err) {
+                    console.error('[SettingsApp] 读取导入文件失败:', err);
+                    const errMsg = `读取导入文件失败: ${err.message}`;
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(errMsg, 'SmallPhone');
+                    } else {
+                        alert(errMsg);
+                    }
+                }
+            };
+            reader.readAsText(file, 'utf-8');
+        });
+
+        // 关闭弹窗助手
+        const closeModal = () => {
+            $importModal.fadeOut(150);
+            pendingImportJson = null;
+            $fileInput.val('');
+        };
+
+        this.container.find('#sp-backup-modal-close, #sp-backup-modal-cancel').on('click', () => {
+            closeModal();
+        });
+
+        // 执行导入处理（支持 'merge' 与 'overwrite'）
+        const executeImport = (mode) => {
+            if (!pendingImportJson) return;
+            try {
+                const res = QQManager.importQqData(pendingImportJson, { mode });
+                closeModal();
+
+                // 立即刷新设置面板上的统计与徽章
+                const updatedFriends = QQManager.getFriends();
+                const updatedGroups = QQManager.getGroups();
+                this.container.find('#sp-backup-summary-badge').text(`${updatedFriends.length}联系人 · ${updatedGroups.length}群聊`);
+                this.container.find('#sp-backup-friends-count').html(`${updatedFriends.length} <span style="font-size: 10.5px; font-weight: normal; color: rgba(255, 255, 255, 0.45);">人</span>`);
+                this.container.find('#sp-backup-groups-count').html(`${updatedGroups.length} <span style="font-size: 10.5px; font-weight: normal; color: rgba(255, 255, 255, 0.45);">个</span>`);
+
+                const modeName = mode === 'overwrite' ? '完全覆盖' : '追加合并';
+                const successMsg = `已完成【${modeName}】导入！当前卡现有 ${updatedFriends.length} 位联系人与 ${updatedGroups.length} 个群聊。`;
+                if (typeof toastr !== 'undefined') {
+                    toastr.success(successMsg, 'SmallPhone');
+                } else {
+                    alert(successMsg);
+                }
+            } catch (err) {
+                console.error('[SettingsApp] 导入执行失败:', err);
+                const errMsg = `导入执行失败: ${err.message}`;
+                if (typeof toastr !== 'undefined') {
+                    toastr.error(errMsg, 'SmallPhone');
+                } else {
+                    alert(errMsg);
+                }
+            }
+        };
+
+        this.container.find('#sp-backup-modal-merge').on('click', () => executeImport('merge'));
+        this.container.find('#sp-backup-modal-overwrite').on('click', () => executeImport('overwrite'));
     }
 
 

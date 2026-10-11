@@ -2032,6 +2032,330 @@ export class QQManager {
     }
 
     /**
+     * 导出当前激活角色卡的 QQ 数据包（联系人 + 群聊包含群成员 + 用户资料）
+     * 严格以当前角色卡为单位组织数据，包含完整的联系人与群聊定义
+     * @returns {Object} 包含版本、角色、联系人、群聊及群成员快照的数据包
+     */
+    static exportQqData() {
+        const currentChar = this.getCurrentCharacter();
+        const friends = this.getFriends();
+        const groups = this.getGroups();
+        const userProfile = this.getUserProfile();
+
+        // 深拷贝好友列表，确保数据独立安全
+        const exportedFriends = JSON.parse(JSON.stringify(friends || []));
+        const friendMap = new Map();
+        for (const f of exportedFriends) {
+            friendMap.set(f.id, f);
+        }
+
+        // 导出群聊列表，并深度嵌入群成员快照信息 (memberDetails)
+        const exportedGroups = (groups || []).map(g => {
+            const memberIds = Array.isArray(g.memberIds) ? [...g.memberIds] : [];
+            const memberDetails = memberIds.map(id => {
+                const f = friendMap.get(id);
+                if (f) {
+                    return {
+                        id: f.id,
+                        name: f.name,
+                        qqNumber: f.qqNumber || '',
+                        remark: f.remark || '',
+                        avatarColor: f.avatarColor || '',
+                    };
+                }
+                return {
+                    id: id,
+                    name: '未知成员',
+                    qqNumber: '',
+                    remark: '',
+                    avatarColor: '#64748b',
+                };
+            });
+
+            return {
+                id: g.id,
+                groupNumber: g.groupNumber || '',
+                name: g.name || '群聊',
+                memberIds: memberIds,
+                memberDetails: memberDetails, // 完备包含群成员详细信息
+                avatarColor: g.avatarColor || this._getAvatarColor(g.name || '群'),
+                createdAt: g.createdAt || Date.now(),
+            };
+        });
+
+        const exportPayload = {
+            version: 1,
+            plugin: 'small-phone',
+            type: 'qq_backup',
+            exportedAt: new Date().toISOString(),
+            character: {
+                id: currentChar.id,
+                name: currentChar.name || '当前角色',
+                key: currentChar.key,
+                avatar: currentChar.avatar || '',
+            },
+            userProfile: {
+                name: userProfile.name || '我',
+                qqNumber: userProfile.qqNumber || '888888',
+                avatar: userProfile.avatar || '',
+            },
+            stats: {
+                friendsCount: exportedFriends.length,
+                groupsCount: exportedGroups.length,
+            },
+            friends: exportedFriends,
+            groups: exportedGroups,
+        };
+
+        return exportPayload;
+    }
+
+    /**
+     * 一键下载当前角色卡的 QQ 备份数据为单个 JSON 文件
+     * @returns {{ filename: string, friendsCount: number, groupsCount: number, characterName: string }}
+     */
+    static downloadQqBackup() {
+        const payload = this.exportQqData();
+        const currentChar = this.getCurrentCharacter();
+        const charName = String(currentChar.name || '当前角色')
+            .replace(/[/\\?%*:|"<>]/g, '_')
+            .trim() || 'QQ';
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const filename = `QQ数据_${charName}_${dateStr}.json`;
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        try {
+            OperationLogService.log({
+                module: 'QQ备份',
+                action: '一键导出',
+                status: 'success',
+                detail: `角色: ${currentChar.name} | 联系人: ${payload.friends.length}人 | 群聊: ${payload.groups.length}个`,
+            });
+        } catch (_) {}
+
+        return {
+            filename,
+            friendsCount: payload.friends.length,
+            groupsCount: payload.groups.length,
+            characterName: currentChar.name,
+        };
+    }
+
+    /**
+     * 导入 QQ 数据包（联系人与群聊）
+     * 关键设计：绝对不核对导出角色卡与当前角色卡是否一致，跨角色卡任意直接导入迁移
+     * @param {string|Object} rawContentOrObject JSON 字符串或已解析的对象
+     * @param {Object} [options]
+     * @param {'merge'|'overwrite'} [options.mode='merge'] 导入模式：merge 为追加合并，overwrite 为完全覆盖
+     * @returns {Object} 导入结果详情
+     */
+    static importQqData(rawContentOrObject, options = {}) {
+        const mode = options.mode || 'merge';
+        let payload = null;
+
+        if (typeof rawContentOrObject === 'string') {
+            try {
+                payload = JSON.parse(rawContentOrObject);
+            } catch (e) {
+                throw new Error(`JSON 解析失败: ${e.message}`);
+            }
+        } else if (rawContentOrObject && typeof rawContentOrObject === 'object') {
+            payload = rawContentOrObject;
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            throw new Error('导入的数据无效，必须为合法的 JSON 对象');
+        }
+
+        const rawFriends = Array.isArray(payload.friends) 
+            ? payload.friends 
+            : (Array.isArray(payload.data?.friends) ? payload.data.friends : []);
+            
+        const rawGroups = Array.isArray(payload.groups) 
+            ? payload.groups 
+            : (Array.isArray(payload.data?.groups) ? payload.data.groups : []);
+
+        if (rawFriends.length === 0 && rawGroups.length === 0) {
+            throw new Error('导入的 JSON 数据中未找到任何联系人或群聊数据');
+        }
+
+        const currentChar = this.getCurrentCharacter();
+        const data = this.getData();
+
+        if (mode === 'overwrite') {
+            // 完全覆盖模式
+            const friendsList = rawFriends.map(f => ({
+                id: f.id || `friend_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                qqNumber: String(f.qqNumber || '').trim() || this._generateRandomQQ(),
+                name: String(f.name || '').trim() || '未命名好友',
+                remark: String(f.remark || '').trim(),
+                signature: String(f.signature || '').trim(),
+                avatarColor: f.avatarColor || this._getAvatarColor(f.name || ''),
+                keys: Array.isArray(f.keys) && f.keys.length > 0 ? f.keys : [f.name, f.remark].filter(Boolean),
+                personaPrompt: String(f.personaPrompt || '').trim(),
+                sourceWorld: String(f.sourceWorld || '').trim(),
+                createdAt: f.createdAt || Date.now(),
+            }));
+
+            const friendIdsSet = new Set(friendsList.map(f => f.id));
+            const groupsList = rawGroups.map(g => ({
+                id: g.id || `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                groupNumber: String(g.groupNumber || '').trim() || String(Math.floor(100000000 + Math.random() * 900000000)),
+                name: String(g.name || '').trim() || '导入群聊',
+                memberIds: (Array.isArray(g.memberIds) ? g.memberIds : []).filter(id => friendIdsSet.has(id)),
+                avatarColor: g.avatarColor || this._getAvatarColor(g.name || '群'),
+                createdAt: g.createdAt || Date.now(),
+            }));
+
+            data.friends = friendsList;
+            data.groups = groupsList;
+            this.saveData(data);
+
+            try {
+                OperationLogService.log({
+                    module: 'QQ备份',
+                    action: '覆盖导入',
+                    status: 'success',
+                    detail: `来源角色: ${payload.character?.name || '未知'} -> 当前角色: ${currentChar.name} | 好友: ${friendsList.length}人 | 群聊: ${groupsList.length}个`,
+                });
+            } catch (_) {}
+
+            return {
+                success: true,
+                mode: 'overwrite',
+                sourceCharacter: payload.character?.name || '未知角色',
+                targetCharacter: currentChar.name,
+                importedFriendsCount: friendsList.length,
+                importedGroupsCount: groupsList.length,
+                totalFriends: data.friends.length,
+                totalGroups: data.groups.length,
+            };
+        }
+
+        // 智能合并模式 (merge)
+        const currentFriends = Array.isArray(data.friends) ? data.friends : [];
+        const currentGroups = Array.isArray(data.groups) ? data.groups : [];
+
+        const idMapping = new Map();
+        let addedFriends = 0;
+        let addedGroups = 0;
+
+        // 1. 合并联系人
+        for (const f of rawFriends) {
+            const fName = String(f.name || '').trim();
+            const fQq = String(f.qqNumber || '').trim();
+            const existing = currentFriends.find(cf => 
+                (fQq && cf.qqNumber === fQq) ||
+                (f.id && cf.id === f.id) ||
+                (fName && cf.name === fName)
+            );
+
+            if (existing) {
+                idMapping.set(f.id, existing.id);
+                if (!existing.remark && f.remark) existing.remark = String(f.remark).trim();
+                if (!existing.signature && f.signature) existing.signature = String(f.signature).trim();
+                if (!existing.personaPrompt && f.personaPrompt) existing.personaPrompt = String(f.personaPrompt).trim();
+                if (Array.isArray(f.keys) && f.keys.length > 0) {
+                    existing.keys = [...new Set([...(existing.keys || []), ...f.keys])];
+                }
+            } else {
+                const newId = currentFriends.some(cf => cf.id === f.id)
+                    ? `friend_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+                    : (f.id || `friend_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
+
+                const newFriend = {
+                    id: newId,
+                    qqNumber: fQq || this._generateRandomQQ(),
+                    name: fName || '未命名好友',
+                    remark: String(f.remark || '').trim(),
+                    signature: String(f.signature || '').trim(),
+                    avatarColor: f.avatarColor || this._getAvatarColor(fName),
+                    keys: Array.isArray(f.keys) && f.keys.length > 0 ? f.keys : [fName, f.remark].filter(Boolean),
+                    personaPrompt: String(f.personaPrompt || '').trim(),
+                    sourceWorld: String(f.sourceWorld || '').trim(),
+                    createdAt: f.createdAt || Date.now(),
+                };
+                idMapping.set(f.id, newId);
+                currentFriends.push(newFriend);
+                addedFriends++;
+            }
+        }
+
+        // 2. 合并群聊
+        for (const g of rawGroups) {
+            const gName = String(g.name || '').trim();
+            const gNum = String(g.groupNumber || '').trim();
+            const rawMemberIds = Array.isArray(g.memberIds) ? g.memberIds : [];
+            const mappedMemberIds = rawMemberIds.map(oldId => idMapping.get(oldId) || oldId);
+            const validMemberIds = mappedMemberIds.filter(id => currentFriends.some(cf => cf.id === id));
+
+            const existingGroup = currentGroups.find(cg => 
+                (gNum && cg.groupNumber === gNum) ||
+                (g.id && cg.id === g.id) ||
+                (gName && cg.name === gName)
+            );
+
+            if (existingGroup) {
+                const mergedIds = [...new Set([...(existingGroup.memberIds || []), ...validMemberIds])];
+                existingGroup.memberIds = mergedIds;
+            } else {
+                const newGroupId = currentGroups.some(cg => cg.id === g.id)
+                    ? `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+                    : (g.id || `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
+
+                const newGroup = {
+                    id: newGroupId,
+                    groupNumber: gNum || String(Math.floor(100000000 + Math.random() * 900000000)),
+                    name: gName || '导入群聊',
+                    memberIds: validMemberIds,
+                    avatarColor: g.avatarColor || this._getAvatarColor(gName || '群'),
+                    createdAt: g.createdAt || Date.now(),
+                };
+                currentGroups.push(newGroup);
+                addedGroups++;
+            }
+        }
+
+        data.friends = currentFriends;
+        data.groups = currentGroups;
+        this.saveData(data);
+
+        try {
+            OperationLogService.log({
+                module: 'QQ备份',
+                action: '合并导入',
+                status: 'success',
+                detail: `来源角色: ${payload.character?.name || '未知'} -> 当前角色: ${currentChar.name} | 新增好友: ${addedFriends}人 | 新增群聊: ${addedGroups}个`,
+            });
+        } catch (_) {}
+
+        return {
+            success: true,
+            mode: 'merge',
+            sourceCharacter: payload.character?.name || '未知角色',
+            targetCharacter: currentChar.name,
+            importedFriendsCount: rawFriends.length,
+            importedGroupsCount: rawGroups.length,
+            addedFriends,
+            addedGroups,
+            totalFriends: data.friends.length,
+            totalGroups: data.groups.length,
+        };
+    }
+
+    /**
      * 生成随机 8 位 QQ 靓号
      */
     static _generateRandomQQ() {
