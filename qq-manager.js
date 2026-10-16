@@ -904,6 +904,37 @@ export class QQManager {
     }
 
     /**
+     * 获取当前角色卡上次在“随机角色”弹窗中选择的世界书条目记忆
+     * @returns {{ uid?: string|number, name?: string }|null}
+     */
+    static getLastRandomRoleEntry() {
+        try {
+            const data = this.getData();
+            if (data && data.lastRandomRoleEntry && typeof data.lastRandomRoleEntry === 'object') {
+                return data.lastRandomRoleEntry;
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    /**
+     * 记录当前角色卡在“随机角色”弹窗中选中的世界书条目
+     * @param {{ uid?: string|number, name: string }} entryInfo
+     */
+    static saveLastRandomRoleEntry(entryInfo) {
+        if (!entryInfo || !entryInfo.name) return;
+        try {
+            const data = this.getData();
+            data.lastRandomRoleEntry = {
+                uid: entryInfo.uid ?? null,
+                name: String(entryInfo.name).trim(),
+                savedAt: Date.now(),
+            };
+            this.saveData(data);
+        } catch (_) {}
+    }
+
+    /**
      * 解散/删除群聊
      */
     static async deleteGroup(groupId) {

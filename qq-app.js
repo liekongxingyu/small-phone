@@ -3065,7 +3065,8 @@ export class QQApp {
         this.container.on('input', '#sp-qq-random-entry-search-input', (e) => {
             this.randomEntrySearchKeyword = $(e.target).val().trim();
             this.container.find('#sp-qq-random-entry-search-clear').toggle(Boolean(this.randomEntrySearchKeyword));
-            this._renderRandomRoleEntriesSelect();
+            const curVal = this.container.find('#sp-qq-random-entry-select').val();
+            this._renderRandomRoleEntriesSelect(curVal);
         });
 
         // 清空条目搜索框
@@ -3073,7 +3074,8 @@ export class QQApp {
             this.randomEntrySearchKeyword = '';
             this.container.find('#sp-qq-random-entry-search-input').val('').focus();
             this.container.find('#sp-qq-random-entry-search-clear').hide();
-            this._renderRandomRoleEntriesSelect();
+            const curVal = this.container.find('#sp-qq-random-entry-select').val();
+            this._renderRandomRoleEntriesSelect(curVal);
         });
 
         // 刷新条目
@@ -3190,7 +3192,18 @@ export class QQApp {
                 return;
             }
 
-            this._renderRandomRoleEntriesSelect();
+            // 读取当前角色卡上次记忆的条目并智能匹配
+            const saved = QQManager.getLastRandomRoleEntry();
+            let preferredUid = null;
+            if (saved) {
+                const matched = entries.find(e => e.name === saved.name)
+                    || (saved.uid ? entries.find(e => String(e.uid) === String(saved.uid)) : null);
+                if (matched) {
+                    preferredUid = matched.uid;
+                }
+            }
+
+            this._renderRandomRoleEntriesSelect(preferredUid);
 
         } catch (err) {
             $select.empty().append('<option value="">扫描失败</option>');
@@ -3251,8 +3264,16 @@ export class QQApp {
             });
         });
 
-        // 排序：符合列表格式的条目优先置顶显示
-        options.sort((a, b) => (b.isListFormat ? 1 : 0) - (a.isListFormat ? 1 : 0));
+        // 排序：若有 preferredUid，让 preferredUid 的项最置顶；其次符合列表格式的置顶
+        options.sort((a, b) => {
+            if (preferredUid !== null) {
+                const aIsPref = String(a.uid) === String(preferredUid);
+                const bIsPref = String(b.uid) === String(preferredUid);
+                if (aIsPref && !bIsPref) return -1;
+                if (!aIsPref && bIsPref) return 1;
+            }
+            return (b.isListFormat ? 1 : 0) - (a.isListFormat ? 1 : 0);
+        });
 
         options.forEach(opt => {
             $select.append(new Option(opt.text, opt.uid));
@@ -3288,6 +3309,9 @@ export class QQApp {
             $poolCount.text('条目池: 0人');
             return;
         }
+
+        // 记忆当前选择到该角色卡专属配置，下次打开自动还原
+        QQManager.saveLastRandomRoleEntry({ uid: entry.uid, name: entry.name });
 
         const roles = parseRoleListFromContent(entry.content || '');
         if (roles.length > 0) {
