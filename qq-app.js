@@ -262,6 +262,81 @@ const INLINE_STYLES = {
 };
 
 /**
+ * 从世界书条目内容中解析角色姓名列表
+ * 严格支持形如 ["贝尔法斯特","可畏","独角兽"] 的列表格式，兼具超强容错性
+ * @param {string} content 条目正文内容
+ * @returns {string[]} 解析出的角色名称数组
+ */
+export function parseRoleListFromContent(content) {
+    if (!content || typeof content !== 'string') return [];
+    let str = content.trim();
+
+    // 1. 去除包裹的 markdown 代码块，如 ```json [...] ```
+    str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    // 2. 尝试从文本中截取第一个 '[' 到最后一个 ']'
+    const firstBracket = str.indexOf('[');
+    const lastBracket = str.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+        const bracketSub = str.slice(firstBracket, lastBracket + 1);
+        
+        // 2.1 尝试标准 JSON 解析
+        try {
+            const parsed = JSON.parse(bracketSub);
+            if (Array.isArray(parsed)) {
+                const list = parsed.map(item => typeof item === 'string' ? item.trim() : (item?.name || String(item || '').trim())).filter(Boolean);
+                if (list.length > 0) return [...new Set(list)];
+            }
+        } catch (_) {}
+
+        // 2.2 尝试替换单引号为双引号后解析
+        try {
+            const sanitized = bracketSub
+                .replace(/[\u201c\u201d]/g, '"')
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/,\s*\]/g, ']')
+                .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+            const parsed = JSON.parse(sanitized);
+            if (Array.isArray(parsed)) {
+                const list = parsed.map(item => typeof item === 'string' ? item.trim() : (item?.name || String(item || '').trim())).filter(Boolean);
+                if (list.length > 0) return [...new Set(list)];
+            }
+        } catch (_) {}
+
+        // 2.3 正则匹配引号中的字符串
+        const inner = bracketSub.slice(1, -1);
+        const matches = inner.match(/["'“‘]([^"'”’\r\n]+)["'”’]/g);
+        if (matches && matches.length > 0) {
+            const list = matches.map(m => m.replace(/^["'“‘]|["'”’]$/g, '').trim()).filter(Boolean);
+            if (list.length > 0) return [...new Set(list)];
+        }
+
+        // 2.4 纯逗号/顿号/换行分隔
+        const splitList = inner.split(/[,，、\n\r]+/).map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+        if (splitList.length > 0) return [...new Set(splitList)];
+    }
+
+    return [];
+}
+
+/**
+ * 从角色列表中无放回随机抽取指定数量的角色
+ * @param {string[]} rolesList 完整角色列表
+ * @param {number} count 抽取数量
+ * @returns {string[]} 随机抽取的角色子集
+ */
+export function sampleRandomRoles(rolesList, count) {
+    if (!Array.isArray(rolesList) || rolesList.length === 0) return [];
+    const targetCount = Math.max(1, Math.min(count, rolesList.length));
+    const pool = [...rolesList];
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, targetCount);
+}
+
+/**
  * QQApp 类：负责小手机内 QQ 应用的视图渲染与交互逻辑
  * 
  * 核心特性：
@@ -282,6 +357,10 @@ export class QQApp {
         this.groupAddCandidateIds = new Set(); // 添加群成员时勾选的好友 ID 集合
         this.cachedWorldEntries = []; // 缓存读取到的世界书条目
         this.selectedUids = new Set(); // 导入弹窗中选中的条目 UID 集合
+        this.randomRoleEntries = []; // 缓存随机角色扫描到的世界书条目
+        this.currentEntryRolesPool = []; // 当前选中的条目解析出来的角色名单池
+        this.sampledRoles = []; // 当前随机抽出的角色名单
+        this.randomEntrySearchKeyword = ''; // 世界书条目搜索过滤关键词
         this.searchKeyword = ''; // 世界书搜索过滤关键词
         this.contactsSearchKeyword = ''; // 联系人界面搜索过滤关键词
         this.createGroupSearchKeyword = ''; // 发起群聊搜索过滤关键词
@@ -348,6 +427,10 @@ export class QQApp {
                         <button type="button" class="sp-qq-dropdown-item" id="sp-qq-btn-open-create-group">
                             <i class="fa-solid fa-users" style="color: #38bdf8;"></i>
                             <span>发起群聊</span>
+                        </button>
+                        <button type="button" class="sp-qq-dropdown-item" id="sp-qq-btn-open-random-group">
+                            <i class="fa-solid fa-dice" style="color: #f59e0b;"></i>
+                            <span>随机角色</span>
                         </button>
                         <button type="button" class="sp-qq-dropdown-item" id="sp-qq-btn-open-import">
                             <i class="fa-solid fa-book-bookmark" style="color: #a78bfa;"></i>
@@ -671,6 +754,107 @@ export class QQApp {
                                 <i class="fa-solid fa-trash-can"></i> 解散本群
                             </button>
                             <button type="button" class="sp-btn sp-btn-secondary sp-btn-xs" id="sp-qq-group-info-done-btn">完成</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 弹窗 5：随机角色并一键建群弹窗 -->
+                <div class="sp-qq-modal-overlay" id="sp-qq-random-role-modal" style="display: none;">
+                    <div class="sp-qq-modal-card" style="max-height: 92%;">
+                        <div class="sp-qq-modal-header">
+                            <div class="sp-qq-modal-title">
+                                <i class="fa-solid fa-dice" style="color: #f59e0b;"></i>
+                                <span>随机角色并一键建群</span>
+                            </div>
+                            <button type="button" class="sp-qq-modal-close" id="sp-qq-random-modal-close-btn">&times;</button>
+                        </div>
+                        <div class="sp-qq-modal-body" style="gap: 10px; overflow-y: auto;">
+                            <!-- 1. 扫描与选择世界书条目栏 -->
+                            <div class="sp-form-item" style="margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="margin: 0; font-size: 11.5px; font-weight: 600;">
+                                        <i class="fa-solid fa-book-bookmark" style="color: #a78bfa; margin-right: 4px;"></i>选择世界书条目 (名单列表)
+                                    </label>
+                                    <button type="button" class="sp-btn-link" id="sp-qq-random-refresh-entries-btn" style="font-size: 10.5px;" title="重新扫描当前角色世界书">
+                                        <i class="fa-solid fa-arrows-rotate"></i> 刷新条目
+                                    </button>
+                                </div>
+                                <!-- 条目实时搜索过滤框 -->
+                                <div class="sp-qq-search-box" style="margin-bottom: 6px;">
+                                    <i class="fa-solid fa-magnifying-glass sp-qq-search-icon"></i>
+                                    <input type="text" class="sp-qq-search-input" id="sp-qq-random-entry-search-input" placeholder="输入关键词搜索世界书条目..." autocomplete="off" />
+                                    <button type="button" class="sp-qq-search-clear-btn" id="sp-qq-random-entry-search-clear" style="display: none;" title="清空搜索">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                <div class="sp-select-wrapper" style="position: relative;">
+                                    <select id="sp-qq-random-entry-select" class="sp-select" style="font-size: 11px; padding: 6px 8px; width: 100%;">
+                                        <option value="">正在扫描世界书条目...</option>
+                                    </select>
+                                </div>
+                                <!-- 条目状态检测提示卡片（简洁状态，无内容预览） -->
+                                <div id="sp-qq-random-entry-status" style="margin-top: 5px; font-size: 10.5px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.6); line-height: 1.4;">
+                                    请选择一个内容为 <code>["角色A","角色B",...]</code> 列表格式的条目
+                                </div>
+                            </div>
+
+                            <!-- 2. 设置抽取数量与操作栏 -->
+                            <div class="sp-form-item" style="margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label style="margin: 0; font-size: 11.5px; font-weight: 600;">
+                                        <i class="fa-solid fa-sliders" style="color: #38bdf8; margin-right: 4px;"></i>抽取角色数量
+                                    </label>
+                                    <span id="sp-qq-random-pool-count" style="font-size: 10.5px; color: rgba(255,255,255,0.45);">条目池: 0人</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button type="button" class="sp-font-adjust-btn" id="sp-qq-random-count-minus" style="width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; cursor: pointer;">
+                                        <i class="fa-solid fa-minus"></i>
+                                    </button>
+                                    <input type="number" id="sp-qq-random-count-input" class="sp-input" min="1" max="100" value="7" style="width: 56px; text-align: center; font-weight: 700; font-size: 13px; padding: 4px;" />
+                                    <button type="button" class="sp-font-adjust-btn" id="sp-qq-random-count-plus" style="width: 28px; height: 28px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; cursor: pointer;">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                    <!-- 快捷数量按钮 -->
+                                    <div style="display: flex; gap: 4px; margin-left: auto;">
+                                        <button type="button" class="sp-btn-micro sp-qq-quick-count-btn" data-count="3">3人</button>
+                                        <button type="button" class="sp-btn-micro sp-qq-quick-count-btn" data-count="5">5人</button>
+                                        <button type="button" class="sp-btn-micro sp-qq-quick-count-btn" data-count="7">7人</button>
+                                        <button type="button" class="sp-btn-micro sp-qq-quick-count-btn" data-count="10">10人</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. 开始抽取按钮 -->
+                            <div style="display: flex; gap: 8px; margin-top: 2px;">
+                                <button type="button" class="sp-btn sp-btn-secondary" id="sp-qq-random-pick-btn" style="flex: 1; padding: 7px 12px; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.35); color: #fbbf24; font-weight: 600; justify-content: center;" disabled>
+                                    <i class="fa-solid fa-shuffle"></i> 随机抽取角色
+                                </button>
+                            </div>
+
+                            <!-- 4. 抽取结果展示区 -->
+                            <div class="sp-form-item" style="margin-bottom: 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="margin: 0; font-size: 11px; color: rgba(255,255,255,0.8);">
+                                        <i class="fa-solid fa-users-viewfinder" style="color: #34d399; margin-right: 4px;"></i>已抽取的群聊成员名单
+                                    </label>
+                                    <span id="sp-qq-random-selected-badge" style="font-size: 10px; color: #34d399; font-weight: 600;">已选 0 人</span>
+                                </div>
+                                <div id="sp-qq-random-roles-container" style="min-height: 60px; max-height: 130px; overflow-y: auto; padding: 6px 8px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start;">
+                                    <div style="font-size: 10.5px; color: rgba(255,255,255,0.35); margin: auto;">点击上方“随机抽取角色”开始抽取</div>
+                                </div>
+                            </div>
+
+                            <!-- 5. 群聊名称设置 -->
+                            <div class="sp-form-item" style="margin-bottom: 0;">
+                                <label style="font-size: 11px; margin-bottom: 3px;">群聊名称 <span style="font-size: 9.5px; color: rgba(255,255,255,0.45); font-weight: normal;">(留空自动生成)</span></label>
+                                <input type="text" id="sp-qq-random-group-name" class="sp-input" placeholder="例如：白鹰联合舰队 / 随机摸鱼小分队" style="font-size: 11.5px; padding: 5px 8px;" />
+                            </div>
+                        </div>
+                        <div class="sp-qq-modal-footer">
+                            <button type="button" class="sp-btn sp-btn-secondary" id="sp-qq-random-modal-cancel-btn">取消</button>
+                            <button type="button" class="sp-btn sp-btn-primary" id="sp-qq-random-create-group-btn" style="background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);" disabled>
+                                <i class="fa-solid fa-paper-plane"></i> 一键立即建群 (0)
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1979,6 +2163,12 @@ export class QQApp {
             this.openCreateGroupModal();
         });
 
+        // 3.1.0 点击打开“随机角色”并建群弹窗
+        this.container.on('click', '#sp-qq-btn-open-random-group', () => {
+            this.container.find('#sp-qq-dropdown-menu').hide();
+            this.openRandomRoleModal();
+        });
+
         // 3.1.1 发起群聊：搜索输入监听
         this.container.on('input', '#sp-qq-create-group-search-input', (e) => {
             this.createGroupSearchKeyword = $(e.target).val().trim();
@@ -2466,6 +2656,9 @@ export class QQApp {
 
         // 14. 导入弹窗专属事件（搜索、全选/全不选、换书）
         this._bindImportModalEvents();
+
+        // 15. 随机角色弹窗专属事件绑定
+        this._bindRandomRoleModalEvents();
     }
 
     /**
@@ -2857,6 +3050,375 @@ export class QQApp {
     _getAvatarDisplayText(name = '') {
         const clean = String(name || '').trim();
         return clean.slice(0, 1).toUpperCase() || '友';
+    }
+
+    /**
+     * 绑定“随机角色”弹窗专属事件交互
+     */
+    _bindRandomRoleModalEvents() {
+        // 关闭与取消
+        this.container.on('click', '#sp-qq-random-modal-close-btn, #sp-qq-random-modal-cancel-btn', () => {
+            this.container.find('#sp-qq-random-role-modal').hide();
+        });
+
+        // 搜索世界书条目实时过滤
+        this.container.on('input', '#sp-qq-random-entry-search-input', (e) => {
+            this.randomEntrySearchKeyword = $(e.target).val().trim();
+            this.container.find('#sp-qq-random-entry-search-clear').toggle(Boolean(this.randomEntrySearchKeyword));
+            this._renderRandomRoleEntriesSelect();
+        });
+
+        // 清空条目搜索框
+        this.container.on('click', '#sp-qq-random-entry-search-clear', () => {
+            this.randomEntrySearchKeyword = '';
+            this.container.find('#sp-qq-random-entry-search-input').val('').focus();
+            this.container.find('#sp-qq-random-entry-search-clear').hide();
+            this._renderRandomRoleEntriesSelect();
+        });
+
+        // 刷新条目
+        this.container.on('click', '#sp-qq-random-refresh-entries-btn', async () => {
+            await this.loadRandomRoleWorldEntries();
+        });
+
+        // 条目选择变动
+        this.container.on('change', '#sp-qq-random-entry-select', (e) => {
+            const uid = $(e.target).val();
+            this._onRandomEntrySelected(uid);
+        });
+
+        // 数量步进：减号
+        this.container.on('click', '#sp-qq-random-count-minus', () => {
+            const $input = this.container.find('#sp-qq-random-count-input');
+            let val = parseInt($input.val(), 10) || 1;
+            val = Math.max(1, val - 1);
+            $input.val(val);
+            if (this.currentEntryRolesPool.length > 0) {
+                this._executeRandomPick();
+            }
+        });
+
+        // 数量步进：加号
+        this.container.on('click', '#sp-qq-random-count-plus', () => {
+            const $input = this.container.find('#sp-qq-random-count-input');
+            let val = parseInt($input.val(), 10) || 1;
+            const max = this.currentEntryRolesPool.length || 100;
+            val = Math.min(max, val + 1);
+            $input.val(val);
+            if (this.currentEntryRolesPool.length > 0) {
+                this._executeRandomPick();
+            }
+        });
+
+        // 数量输入框直接改动
+        this.container.on('change input', '#sp-qq-random-count-input', (e) => {
+            let val = parseInt($(e.target).val(), 10);
+            if (isNaN(val) || val < 1) val = 1;
+            const max = this.currentEntryRolesPool.length || 100;
+            if (val > max) val = max;
+            $(e.target).val(val);
+        });
+
+        // 快捷数量按钮点击
+        this.container.on('click', '.sp-qq-quick-count-btn', (e) => {
+            const count = parseInt($(e.currentTarget).data('count'), 10) || 7;
+            const max = this.currentEntryRolesPool.length || count;
+            const finalCount = Math.min(count, max);
+            this.container.find('#sp-qq-random-count-input').val(finalCount);
+            if (this.currentEntryRolesPool.length > 0) {
+                this._executeRandomPick();
+            }
+        });
+
+        // 点击“随机抽取角色”按钮
+        this.container.on('click', '#sp-qq-random-pick-btn', () => {
+            this._executeRandomPick();
+        });
+
+        // 点击“一键立即建群”按钮
+        this.container.on('click', '#sp-qq-random-create-group-btn', async () => {
+            await this._handleCreateRandomGroup();
+        });
+    }
+
+    /**
+     * 打开“随机角色”并一键建群弹窗
+     */
+    async openRandomRoleModal() {
+        this.container.find('#sp-qq-dropdown-menu').hide();
+        const $modal = this.container.find('#sp-qq-random-role-modal');
+        $modal.show();
+
+        // 重置界面状态：搜索词、池与名单清空，不自动抽取
+        this.randomEntrySearchKeyword = '';
+        this.container.find('#sp-qq-random-entry-search-input').val('');
+        this.container.find('#sp-qq-random-entry-search-clear').hide();
+
+        this.currentEntryRolesPool = [];
+        this.sampledRoles = [];
+        this.container.find('#sp-qq-random-count-input').val('7');
+        this.container.find('#sp-qq-random-roles-container').html(`
+            <div style="font-size: 10.5px; color: rgba(255,255,255,0.35); margin: auto;">点击上方“随机抽取角色”开始抽取</div>
+        `);
+        this.container.find('#sp-qq-random-selected-badge').text('已选 0 人');
+        this.container.find('#sp-qq-random-create-group-btn').prop('disabled', true).html('<i class="fa-solid fa-paper-plane"></i> 一键立即建群 (0)');
+        this.container.find('#sp-qq-random-pick-btn').prop('disabled', true);
+        this.container.find('#sp-qq-random-pool-count').text('条目池: 0人');
+        this.container.find('#sp-qq-random-group-name').val('').data('auto-generated', false);
+
+        await this.loadRandomRoleWorldEntries();
+    }
+
+    /**
+     * 扫描当前角色绑定的世界书条目并进行初始化
+     */
+    async loadRandomRoleWorldEntries() {
+        const $select = this.container.find('#sp-qq-random-entry-select');
+        const $status = this.container.find('#sp-qq-random-entry-status');
+        $select.empty().append('<option value="">正在扫描世界书条目...</option>');
+        $status.html('<i class="fa-solid fa-spinner fa-spin"></i> 正在读取当前角色绑定的世界书...');
+
+        try {
+            const scanResult = await QQManager.scanCurrentCharacterWorldEntries({ includeDisabled: true });
+            const entries = scanResult.entries || [];
+            this.randomRoleEntries = entries;
+
+            if (entries.length === 0) {
+                $select.empty().append('<option value="">未找到任何世界书条目</option>');
+                $status.html('⚠️ 当前角色卡暂未检测到世界书条目，请确认已在酒馆中绑定世界书。');
+                this.container.find('#sp-qq-random-pick-btn').prop('disabled', true);
+                return;
+            }
+
+            this._renderRandomRoleEntriesSelect();
+
+        } catch (err) {
+            $select.empty().append('<option value="">扫描失败</option>');
+            $status.html(`<span style="color: #ef4444;">扫描世界书失败: ${err.message || err}</span>`);
+            this.container.find('#sp-qq-random-pick-btn').prop('disabled', true);
+        }
+    }
+
+    /**
+     * 根据搜索关键字过滤条目并重新填充下拉选择框
+     * @param {string|number} [preferredUid] 优先保留选中的条目 UID
+     */
+    _renderRandomRoleEntriesSelect(preferredUid = null) {
+        const $select = this.container.find('#sp-qq-random-entry-select');
+        const $status = this.container.find('#sp-qq-random-entry-status');
+        const $pickBtn = this.container.find('#sp-qq-random-pick-btn');
+        const kw = (this.randomEntrySearchKeyword || '').toLowerCase().trim();
+
+        const filtered = (this.randomRoleEntries || []).filter(entry => {
+            if (!kw) return true;
+            const name = String(entry.name || '').toLowerCase();
+            const world = String(entry.worldName || '').toLowerCase();
+            const keys = (entry.keys || []).map(k => String(k || '').toLowerCase()).join(' ');
+            return name.includes(kw) || world.includes(kw) || keys.includes(kw);
+        });
+
+        $select.empty();
+
+        if (filtered.length === 0) {
+            $select.append('<option value="">未搜索到匹配的世界书条目</option>');
+            $status.html('<span style="color: #fbbf24;"><i class="fa-solid fa-magnifying-glass"></i> 未搜索到匹配条目，请更换关键词</span>');
+            $pickBtn.prop('disabled', true);
+            this.currentEntryRolesPool = [];
+            this.container.find('#sp-qq-random-pool-count').text('条目池: 0人');
+            return;
+        }
+
+        // 预先检测条目是否符合列表格式，符合列表格式的条目置顶
+        let firstValidUid = null;
+        const options = [];
+
+        filtered.forEach(entry => {
+            const parsedRoles = parseRoleListFromContent(entry.content || '');
+            const isListFormat = parsedRoles.length > 0;
+            const labelPrefix = isListFormat ? `[列表: ${parsedRoles.length}人] ` : '';
+            // 不包含世界书名字括号，不添加未激活标注
+            const optText = `${labelPrefix}${entry.name}`;
+
+            if (isListFormat && firstValidUid === null) {
+                firstValidUid = entry.uid;
+            }
+
+            options.push({
+                uid: entry.uid,
+                text: optText,
+                isListFormat,
+                rolesCount: parsedRoles.length,
+            });
+        });
+
+        // 排序：符合列表格式的条目优先置顶显示
+        options.sort((a, b) => (b.isListFormat ? 1 : 0) - (a.isListFormat ? 1 : 0));
+
+        options.forEach(opt => {
+            $select.append(new Option(opt.text, opt.uid));
+        });
+
+        // 决定选中项：优先 preferredUid -> 其次第一个列表格式条目 -> 再次首个条目
+        let targetUid = null;
+        if (preferredUid !== null && options.some(o => String(o.uid) === String(preferredUid))) {
+            targetUid = preferredUid;
+        } else if (firstValidUid !== null) {
+            targetUid = firstValidUid;
+        } else {
+            targetUid = options[0].uid;
+        }
+
+        $select.val(targetUid);
+        this._onRandomEntrySelected(targetUid);
+    }
+
+    /**
+     * 处理选中的世界书条目，纯净解析角色列表（不显示名单内容预览，不自动抽选）
+     */
+    _onRandomEntrySelected(uid) {
+        const entry = this.randomRoleEntries.find(e => String(e.uid) === String(uid));
+        const $status = this.container.find('#sp-qq-random-entry-status');
+        const $pickBtn = this.container.find('#sp-qq-random-pick-btn');
+        const $poolCount = this.container.find('#sp-qq-random-pool-count');
+
+        if (!entry) {
+            this.currentEntryRolesPool = [];
+            $status.html('请选择一个有效的世界书条目');
+            $pickBtn.prop('disabled', true);
+            $poolCount.text('条目池: 0人');
+            return;
+        }
+
+        const roles = parseRoleListFromContent(entry.content || '');
+        if (roles.length > 0) {
+            this.currentEntryRolesPool = roles;
+            $poolCount.text(`条目池: ${roles.length}人`);
+            // 纯净状态提示：简洁告知识别到列表条目，绝不打印名单内容预览
+            $status.html(`
+                <span style="color: #4ade80;"><i class="fa-solid fa-circle-check"></i> 识别到列表格式条目 (池内共 ${roles.length} 位角色)</span>
+            `);
+            $pickBtn.prop('disabled', false);
+
+            // 清空先前的抽选结果，等待用户点击抽取按钮，绝不自动抽取预览
+            this.sampledRoles = [];
+            this._renderSampledRoles();
+        } else {
+            this.currentEntryRolesPool = [];
+            $poolCount.text('条目池: 0人');
+            $status.html(`
+                <span style="color: #fbbf24;"><i class="fa-solid fa-triangle-exclamation"></i> 内容非列表格式</span>
+                <span style="color: rgba(255,255,255,0.65); margin-left: 4px;">该条目不是 <code>["角色A","角色B",...]</code> 列表，无法进行抽取。</span>
+            `);
+            $pickBtn.prop('disabled', true);
+            this.sampledRoles = [];
+            this._renderSampledRoles();
+        }
+    }
+
+    /**
+     * 从当前条目池中无放回随机抽取指定数量的角色
+     */
+    _executeRandomPick() {
+        if (!this.currentEntryRolesPool || this.currentEntryRolesPool.length === 0) {
+            return;
+        }
+
+        let count = parseInt(this.container.find('#sp-qq-random-count-input').val(), 10);
+        if (isNaN(count) || count < 1) count = 1;
+
+        count = Math.min(count, this.currentEntryRolesPool.length);
+        this.container.find('#sp-qq-random-count-input').val(count);
+
+        this.sampledRoles = sampleRandomRoles(this.currentEntryRolesPool, count);
+        this._renderSampledRoles();
+
+        // 自动生成推荐群聊名称
+        const $nameInput = this.container.find('#sp-qq-random-group-name');
+        if (!$nameInput.val().trim() || $nameInput.data('auto-generated')) {
+            const sample = this.sampledRoles.slice(0, 2).join('、');
+            const autoName = this.sampledRoles.length > 2 
+                ? `${sample}等${this.sampledRoles.length}人的群聊` 
+                : `${sample}的群聊`;
+            $nameInput.val(autoName).data('auto-generated', true);
+        }
+    }
+
+    /**
+     * 渲染抽出的角色名单
+     */
+    _renderSampledRoles() {
+        const $container = this.container.find('#sp-qq-random-roles-container');
+        const $badge = this.container.find('#sp-qq-random-selected-badge');
+        const $confirmBtn = this.container.find('#sp-qq-random-create-group-btn');
+
+        const count = this.sampledRoles.length;
+        $badge.text(`已选 ${count} 人`);
+        $confirmBtn.prop('disabled', count === 0).html(`<i class="fa-solid fa-paper-plane"></i> 一键立即建群 (${count})`);
+
+        if (count === 0) {
+            $container.html(`
+                <div style="font-size: 10.5px; color: rgba(255,255,255,0.35); margin: auto;">点击上方“随机抽取角色”开始抽取</div>
+            `);
+            return;
+        }
+
+        const colors = ['#2563eb', '#0284c7', '#0d9488', '#16a34a', '#d97706', '#ea580c', '#e11d48', '#9333ea', '#7c3aed', '#db2777'];
+        const tagsHtml = this.sampledRoles.map((name, idx) => {
+            const color = colors[idx % colors.length];
+            const safeName = $('<div>').text(name).html();
+            return `
+                <span class="sp-qq-random-role-tag" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); font-size: 11px; color: #f1f5f9;">
+                    <span style="width: 7px; height: 7px; border-radius: 50%; background-color: ${color}; flex-shrink: 0;"></span>
+                    <span>${safeName}</span>
+                </span>
+            `;
+        }).join('');
+
+        $container.html(tagsHtml);
+    }
+
+    /**
+     * 处理一键建群
+     */
+    async _handleCreateRandomGroup() {
+        if (!this.sampledRoles || this.sampledRoles.length === 0) {
+            if (typeof toastr !== 'undefined') toastr.warning('请先抽取群成员角色！', 'QQ');
+            return;
+        }
+
+        const groupName = this.container.find('#sp-qq-random-group-name').val().trim();
+        const selectedEntryUid = this.container.find('#sp-qq-random-entry-select').val();
+        const selectedEntry = this.randomRoleEntries.find(e => String(e.uid) === String(selectedEntryUid));
+        const sourceWorld = selectedEntry ? `${selectedEntry.worldName}·${selectedEntry.name}` : '世界书随机角色';
+
+        try {
+            const result = QQManager.createGroupFromRoleNames({
+                name: groupName,
+                roleNames: this.sampledRoles,
+                sourceWorld,
+            });
+
+            this.container.find('#sp-qq-random-role-modal').hide();
+            this._refreshViews();
+
+            const tipMsg = `成功创建群聊【${result.group.name}】（共 ${result.memberCount} 人，已自动添加 ${result.newlyAddedFriends} 位新好友）！`;
+            if (typeof toastr !== 'undefined') {
+                toastr.success(tipMsg, 'QQ群聊');
+            } else {
+                alert(tipMsg);
+            }
+
+            // 直接打开新建的群聊会话
+            this.openChat(result.group.id, 'group');
+
+        } catch (err) {
+            console.error('[QQApp] 随机角色建群失败:', err);
+            if (typeof toastr !== 'undefined') {
+                toastr.error(`建群失败: ${err.message || err}`, 'QQ群聊');
+            } else {
+                alert(`建群失败: ${err.message || err}`);
+            }
+        }
     }
 }
 

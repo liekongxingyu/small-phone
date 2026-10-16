@@ -836,6 +836,74 @@ export class QQManager {
     }
 
     /**
+     * 根据角色名列表一键建群（若角色不存在于通讯录则自动添加好友）
+     * @param {Object} params
+     * @param {string} [params.name] 群名称（选填，留空自动生成）
+     * @param {string[]} params.roleNames 角色姓名列表
+     * @param {string} [params.sourceWorld] 来源世界书或条目说明（选填）
+     * @returns {Object} 新建群聊信息及新增好友统计
+     */
+    static createGroupFromRoleNames({ name = '', roleNames = [], sourceWorld = '' }) {
+        if (!Array.isArray(roleNames) || roleNames.length === 0) {
+            throw new Error('角色名单不能为空');
+        }
+
+        const cleanNames = [...new Set(roleNames.map(n => String(n || '').trim()).filter(Boolean))];
+        if (cleanNames.length === 0) {
+            throw new Error('未提取到有效的角色名称');
+        }
+
+        const existingFriends = this.getFriends();
+        const memberIds = [];
+        let newlyAddedFriends = 0;
+
+        for (const roleName of cleanNames) {
+            let friend = existingFriends.find(f => f.name === roleName);
+            if (!friend) {
+                friend = this.addFriend({
+                    name: roleName,
+                    qqNumber: this._generateRandomQQ(),
+                    remark: '',
+                    signature: '世界书抽取角色',
+                    keys: [roleName],
+                    sourceWorld: sourceWorld || '世界书随机角色',
+                });
+                newlyAddedFriends++;
+            }
+            if (friend && friend.id) {
+                memberIds.push(friend.id);
+            }
+        }
+
+        let finalName = String(name || '').trim();
+        if (!finalName) {
+            const sampleNames = cleanNames.slice(0, 3).join('、');
+            finalName = cleanNames.length > 3 ? `${sampleNames}等${cleanNames.length}人` : `${sampleNames}的群聊`;
+        }
+
+        const newGroup = this.createGroup({
+            name: finalName,
+            memberIds,
+        });
+
+        try {
+            OperationLogService.log({
+                module: 'QQ群聊',
+                action: '随机角色建群',
+                status: 'success',
+                detail: `群名: ${newGroup.name} | 成员: ${cleanNames.length}人 (新增好友: ${newlyAddedFriends}人)`,
+            });
+        } catch (_) {}
+
+        return {
+            group: newGroup,
+            memberCount: cleanNames.length,
+            newlyAddedFriends,
+            roleNames: cleanNames,
+        };
+    }
+
+    /**
      * 解散/删除群聊
      */
     static async deleteGroup(groupId) {
@@ -1752,7 +1820,7 @@ export class QQManager {
      * 严格遵循启用状态：未开启/已禁用的条目绝对过滤排除！
      * @returns {Promise<{ characterName: string, characterKey: string, boundBooks: string[], entries: Array<{ uid, worldName, name, keys, content, snippet, enabled, constant }> }>}
      */
-    static async scanCurrentCharacterWorldEntries() {
+    static async scanCurrentCharacterWorldEntries({ includeDisabled = false } = {}) {
         const currentChar = this.getCurrentCharacter();
         const char = currentChar.charData;
         const boundBooks = [];
@@ -1832,8 +1900,8 @@ export class QQManager {
             }
         } catch (_) {}
 
-        // 5. 若角色卡本身未显式指定世界书：读取酒馆当前全局激活的世界书 (Global World Info)
-        if (boundBooks.length === 0) {
+        // 5. 酒馆全局激活的世界书 (Global World Info)
+        try {
             const globalSelection = context?.chatWorldInfo?.globalSelection;
             if (Array.isArray(globalSelection) && globalSelection.length > 0) {
                 boundBooks.push(...globalSelection);
@@ -1842,7 +1910,7 @@ export class QQManager {
             } else if (context?.worldInfo?.globalSelect && Array.isArray(context.worldInfo.globalSelect) && context.worldInfo.globalSelect.length > 0) {
                 boundBooks.push(...context.worldInfo.globalSelect);
             }
-        }
+        } catch (_) {}
 
         // 去重并过滤空白
         const uniqueBooks = [...new Set(boundBooks.map(b => String(b || '').trim()).filter(Boolean))];
@@ -1856,7 +1924,7 @@ export class QQManager {
 
         if (uniqueBooks.length > 0) {
             // 6.1 并发抓取所有激活的外部世界书条目
-            const externalPromises = uniqueBooks.map(bName => this._fetchWorldInfoEntries(bName));
+            const externalPromises = uniqueBooks.map(bName => this._fetchWorldInfoEntries(bName, includeDisabled));
             const externalResults = await Promise.all(externalPromises);
             for (const entries of externalResults) {
                 mergedEntries.push(...entries);
@@ -1866,7 +1934,8 @@ export class QQManager {
             const charBook = char?.data?.character_book || char?.character_book;
             if (charBook?.entries && Array.isArray(charBook.entries)) {
                 charBook.entries.forEach((entry, idx) => {
-                    if (!entry || !this.isWorldInfoEntryEnabled(entry)) return;
+                    if (!entry) return;
+                    if (!includeDisabled && !this.isWorldInfoEntryEnabled(entry)) return;
                     const keys = Array.isArray(entry.keys)
                         ? entry.keys
                         : (typeof entry.keys === 'string' ? entry.keys.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -1881,18 +1950,18 @@ export class QQManager {
                         keys: keys,
                         content: content,
                         snippet: content.replace(/[\r\n\t]+/g, ' ').slice(0, 90),
-                        enabled: true,
+                        enabled: this.isWorldInfoEntryEnabled(entry),
                         constant: Boolean(entry.constant),
                     });
                 });
             }
         }
 
-        // 按名字去重，并且严格二次校验必须处于开启状态
+        // 按名字去重，并且在非 includeDisabled 模式下严格二次校验必须处于开启状态
         const dedupedEntries = [];
         const seenNames = new Set();
         for (const item of mergedEntries) {
-            if (!this.isWorldInfoEntryEnabled(item)) continue;
+            if (!includeDisabled && !this.isWorldInfoEntryEnabled(item)) continue;
             const cleanName = item.name.trim();
             if (!cleanName || seenNames.has(cleanName)) continue;
             seenNames.add(cleanName);
@@ -1908,9 +1977,9 @@ export class QQManager {
     }
 
     /**
-     * 读取指定世界书的全部有效开启条目（已禁用条目自动过滤，绝不流入）
+     * 读取指定世界书的条目（根据 includeDisabled 决定是否包含已禁用条目）
      */
-    static async _fetchWorldInfoEntries(bookName) {
+    static async _fetchWorldInfoEntries(bookName, includeDisabled = false) {
         if (!bookName) return [];
         try {
             const context = (typeof Luker !== 'undefined' && Luker.getContext)
@@ -1954,9 +2023,9 @@ export class QQManager {
 
             const entriesArray = Array.isArray(rawEntries) ? rawEntries : Object.values(rawEntries);
 
-            // 严格过滤：仅保留真正开启且未被禁用的条目
+            // 过滤：非 includeDisabled 模式下仅保留真正开启且未被禁用的条目
             return entriesArray
-                .filter(entry => entry && this.isWorldInfoEntryEnabled(entry))
+                .filter(entry => entry && (includeDisabled || this.isWorldInfoEntryEnabled(entry)))
                 .map((entry, idx) => {
                     const keys = Array.isArray(entry.key)
                         ? entry.key
@@ -1978,7 +2047,7 @@ export class QQManager {
                         keys: keys,
                         content: content,
                         snippet: snippet,
-                        enabled: true,
+                        enabled: this.isWorldInfoEntryEnabled(entry),
                         constant: Boolean(entry.constant),
                     };
                 });
